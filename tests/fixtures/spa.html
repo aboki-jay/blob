@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>App — Example website</title>
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
+    <!-- A tiny single-page app: it changes the address and the content without loading a new document. -->
+    <nav>
+      <a href="/spa" data-route>Inbox</a>
+      <a href="/spa/settings" data-route>Settings</a>
+    </nav>
+    <main id="view"></main>
+    <script>
+      const views = {
+        '/spa': '<h1>Inbox</h1><p id="inbox-note">Three unread messages.</p><button id="compose">Compose</button>',
+        '/spa/settings': '<h1>Settings</h1><p id="settings-note">Notifications are on.</p><button id="save">Save changes</button>',
+      };
+      const render = () => {
+        document.getElementById('view').innerHTML = views[location.pathname] || views['/spa'];
+      };
+      document.addEventListener('click', (event) => {
+        const link = event.target.closest('a[data-route]');
+        if (!link) return;
+        event.preventDefault();
+        history.pushState({}, '', link.getAttribute('href'));
+        render();
+      });
+      addEventListener('popstate', render);
+      render();
+    </script>
+  </body>
+</html>

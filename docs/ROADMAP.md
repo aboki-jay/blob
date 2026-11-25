@@ -2,11 +2,11 @@
 
 Blob is a fun project with limited resources. Each milestone should leave something small, understandable, and useful.
 
-## Milestone 1: Local guest experience (next)
+## Milestone 1: Local guest experience (built, awaiting real-browser verification)
 
 Load the extension, enable it on a supported site, place a comment on an element as a guest, refresh, and reopen the same conversation. Find it in History, reply locally, resolve and reopen it, and reattach it if its location changes. No backend, account, or AI service.
 
-Full specification: [MILESTONE-1.md](MILESTONE-1.md).
+Full specification: [MILESTONE-1.md](MILESTONE-1.md). What has and has not been verified: [STATUS.md](STATUS.md).
 
 ## Milestone 2: Shared threads
 

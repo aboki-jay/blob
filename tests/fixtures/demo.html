@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Studio — Example website</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; color: #26272c; }
+      header { display: flex; justify-content: space-between; padding: 32px 64px; }
+      header nav a { margin-left: 24px; color: #676a79; text-decoration: none; font-size: 13px; }
+      main { padding: 48px 64px; }
+      .hero { display: grid; grid-template-columns: 1fr 448px; gap: 96px; align-items: center; }
+      h1 { margin: 0 0 24px; font-size: 40px; line-height: 48px; max-width: 420px; }
+      .lead { margin: 0 0 24px; color: #676a79; max-width: 520px; line-height: 20px; }
+      #hero { padding: 12px 24px; border: 0; border-radius: 8px; background: #623df5; color: #fff; font-size: 16px; font-weight: 500; }
+      .panel { padding: 72px 40px; border-radius: 12px; background: #ece8fc; color: #623df5; font-size: 36px; font-weight: 700; line-height: 48px; }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 80px; }
+      .card { padding: 24px; border-radius: 12px; background: #f9fafa; }
+      .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 500; }
+      .card p { margin: 0 0 12px; color: #676a79; font-size: 13px; }
+      .card a { color: #623df5; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>STUDIO</strong>
+      <nav><a href="#">Work</a><a href="#">About</a><a href="#">Journal</a><a href="#">Contact</a></nav>
+    </header>
+    <main>
+      <div class="hero">
+        <div>
+          <h1>A thoughtful home for your next idea.</h1>
+          <p class="lead">We help people turn a promising thought into something useful, clear and easy to love.</p>
+          <button id="hero">Explore our work</button>
+        </div>
+        <div class="panel">GOOD IDEAS NEED ROOM.</div>
+      </div>
+      <div class="cards">
+        <section class="card"><h2>Clear structure</h2><p>Find a place for every idea, without losing the details.</p><a href="#">Learn more</a></section>
+        <section class="card"><h2>Room to create</h2><p>Explore, share feedback and make progress together.</p><a href="#">Learn more</a></section>
+        <section class="card"><h2>A shared perspective</h2><p>Good work gets better when we can talk about it.</p><a href="#">Learn more</a></section>
+      </div>
+    </main>
+  </body>
+</html>

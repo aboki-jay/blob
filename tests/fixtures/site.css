@@ -1,0 +1,55 @@
+/* Deliberately pushy page styles. Blob's own UI must not pick any of this up. */
+* {
+  font-family: 'Comic Sans MS', 'Courier New', monospace !important;
+  letter-spacing: 3px;
+}
+
+html {
+  font-size: 22px;
+}
+
+body {
+  margin: 0;
+  padding: 40px 64px 400px;
+  color: #b00020;
+  line-height: 3;
+  text-transform: uppercase;
+  direction: ltr;
+}
+
+button,
+div,
+span,
+p,
+textarea {
+  border: 2px dashed lime;
+  text-align: right;
+}
+
+button {
+  background: #623df5 !important;
+  color: white !important;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+nav a {
+  margin-right: 24px;
+}
+
+.cards {
+  display: flex;
+  gap: 24px;
+  margin-top: 48px;
+}
+
+.card {
+  flex: 1;
+  padding: 24px;
+  background: #f4f4f6;
+}
+
+.tall {
+  height: 1400px;
+}
