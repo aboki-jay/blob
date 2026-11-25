@@ -201,14 +201,24 @@ export class BlobStore {
     });
   }
 
-  /** Safe to call twice with the same messageId. */
-  addReply(threadId: string, messageId: string, body: string): Promise<Thread> {
+  /**
+   * Adds a comment to a conversation. With `replyTo`, it is filed as a reply
+   * to that comment. Replies are one level deep: replying to a reply joins the
+   * same group. Safe to call twice with the same messageId.
+   */
+  addReply(threadId: string, messageId: string, body: string, replyTo?: string): Promise<Thread> {
     return this.mutate((data) => {
       const thread = data.threads[threadId];
       if (!thread) throw new BlobError('not-found');
       if (thread.messages.some((m) => m.id === messageId)) return thread;
       const now = this.now();
-      thread.messages.push({ id: messageId, body, createdAt: now });
+      const message: Thread['messages'][number] = { id: messageId, body, createdAt: now };
+      if (replyTo) {
+        const target = thread.messages.find((m) => m.id === replyTo);
+        if (!target) throw new BlobError('not-found');
+        message.replyTo = target.replyTo ?? target.id;
+      }
+      thread.messages.push(message);
       thread.updatedAt = now;
       return thread;
     });

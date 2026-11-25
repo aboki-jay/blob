@@ -6,7 +6,12 @@ import { isSupportedUrl } from '@/lib/page';
 import { App } from './App';
 import { setDisconnectHandler } from './client';
 import { loadFonts } from './fonts';
-import css from './style.css?inline';
+import launcherCss from './launcher.css?inline';
+import baseCss from './style.css?inline';
+import tagCss from './tag.css?inline';
+
+// Order matters: the launcher's rules come last so they win.
+const css = `${baseCss}\n${launcherCss}\n${tagCss}`;
 
 const MOUNTED = '__blobOverlayMounted';
 const REPLACE_EVENT = 'blob:replace';

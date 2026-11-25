@@ -159,6 +159,22 @@ describe('resolve, reopen, reattach, delete', () => {
     expect(parseDrafts(area.items[KEYS.drafts])).toEqual({});
   });
 
+  it('files a reply under the comment it answers, one level deep', async () => {
+    const area = new FakeArea();
+    const store = new BlobStore(area);
+    const thread = await create(store);
+    const first = thread.messages[0]!.id;
+    const replyId = id();
+    await store.addReply(thread.id, replyId, 'A reply to the first comment', first);
+    await store.addReply(thread.id, id(), 'A reply to that reply', replyId);
+    await store.addReply(thread.id, id(), 'Another comment on the conversation');
+
+    const messages = (await readData(area)).threads[thread.id]!.messages;
+    expect(messages.map((m) => m.replyTo)).toEqual([undefined, first, first, undefined]);
+    await expect(store.addReply(thread.id, id(), 'To nothing', id())).rejects.toMatchObject({ code: 'not-found' });
+    expect((await readData(area)).threads[thread.id]!.messages).toHaveLength(4);
+  });
+
   it('refuses to change a conversation that does not exist', async () => {
     const store = new BlobStore(new FakeArea());
     await expect(store.addReply(id(), id(), 'Hello')).rejects.toMatchObject({ code: 'not-found' });

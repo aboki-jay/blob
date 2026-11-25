@@ -30,6 +30,11 @@ export interface Message {
   body: string;
   /** ISO 8601 timestamp. */
   createdAt: string;
+  /**
+   * Set on a reply to one particular comment in the conversation: the id of
+   * that comment. Comments added to the conversation itself have none.
+   */
+  replyTo?: string;
 }
 
 export type ThreadStatus = 'open' | 'resolved';

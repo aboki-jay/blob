@@ -44,7 +44,7 @@ export async function handleRequest(raw: unknown, sender: Sender, deps: HandlerD
         return { ok: true, data: thread };
       }
       case 'thread/reply': {
-        const thread = await store.addReply(request.threadId, request.messageId, request.body);
+        const thread = await store.addReply(request.threadId, request.messageId, request.body, request.replyTo);
         await store.setDraft(`reply:${request.threadId}`, '').catch(() => undefined);
         return { ok: true, data: thread };
       }

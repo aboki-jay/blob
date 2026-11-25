@@ -11,7 +11,7 @@ import type { ErrorCode } from './storage/store';
 
 export type Request =
   | { type: 'thread/create'; id: string; messageId: string; href: string; title: string; anchor: AnchorDescriptor; body: string }
-  | { type: 'thread/reply'; threadId: string; messageId: string; body: string }
+  | { type: 'thread/reply'; threadId: string; messageId: string; body: string; replyTo?: string }
   | { type: 'thread/status'; threadId: string; status: ThreadStatus }
   | { type: 'thread/reattach'; threadId: string; anchor: AnchorDescriptor }
   | { type: 'thread/delete'; threadId: string }
@@ -97,7 +97,9 @@ export function parseRequest(raw: unknown): Request | null {
     case 'thread/reply': {
       const body = cleanBody(raw.body);
       if (!isId(raw.threadId) || !isId(raw.messageId) || !body) return null;
-      return { type: raw.type, threadId: raw.threadId, messageId: raw.messageId, body };
+      if (raw.replyTo !== undefined && !isId(raw.replyTo)) return null;
+      const reply = { type: raw.type, threadId: raw.threadId, messageId: raw.messageId, body } as const;
+      return raw.replyTo ? { ...reply, replyTo: raw.replyTo } : reply;
     }
     case 'thread/status':
       if (!isId(raw.threadId) || (raw.status !== 'open' && raw.status !== 'resolved')) return null;

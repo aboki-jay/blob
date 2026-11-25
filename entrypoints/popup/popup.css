@@ -206,3 +206,7 @@ h1 {
 .saved__row:hover {
   background: var(--bg-fill1);
 }
+.restricted-state { display: grid; justify-items: center; gap: 8px; padding: 22px 4px; text-align: center; color: var(--text-secondary); }
+.restricted-art { position: relative; display: grid; place-content: center; justify-items: center; gap: 5px; width: 110px; height: 72px; margin-bottom: 4px; background: var(--bg-base); border: 1px solid var(--border-soft); border-radius: 8px; box-shadow: 0 4px 8px #19181b14; }
+.restricted-art i { position: absolute; top: 8px; left: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--border); box-shadow: 10px 0 var(--border), 20px 0 var(--border); }
+.restricted-art b { width: 40px; height: 5px; background: var(--primary-focus); border-radius: 2px; }

@@ -12,7 +12,7 @@ Blob is an open-source Chrome extension for leaving persistent, Figma-style comm
 
 ## What works today
 
-- A draggable Blob button on the page. Click to open the drawer, drag to move it.
+- A Blob tab docked to the edge of the page. It tucks away until your pointer comes near; click to open the drawer, drag to move it along the edge or to the other side.
 - **Add a Blob**: choose any element, write a comment, and a numbered pin appears on it.
 - Comments and replies are saved on your device and survive reloads and browser restarts.
 - Resolve, reopen and delete conversations (delete asks first).

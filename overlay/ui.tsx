@@ -1,3 +1,10 @@
+import commentMode from '@/assets/icons/comment-mode.svg?raw';
+import resolved from '@/assets/icons/resolved.svg?raw';
+import chevron from '@/assets/icons/chevron-right.svg?raw';
+import sendArrow from '@/assets/icons/send.svg?raw';
+import filter from '@/assets/icons/filter.svg?raw';
+import file from '@/assets/icons/file.svg?raw';
+import settings from '@/assets/icons/settings.svg?raw';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import historyActive from '@/assets/icons/history-active.svg?raw';
 import history from '@/assets/icons/history.svg?raw';
@@ -8,7 +15,7 @@ import message from '@/assets/icons/message-square-text.svg?raw';
 import x from '@/assets/icons/x.svg?raw';
 
 /** Icons exported from the Figma file, bundled as-is. */
-export const icons = { historyActive, history, mascot, lock, messageActive, message, x };
+export const icons = { commentMode, resolved, chevron, sendArrow, filter, file, settings, historyActive, history, mascot, lock, messageActive, message, x };
 
 /** Draws one of Blob's own bundled SVG files. Never used for page content. */
 export function Icon({ svg, className = '' }: { svg: string; className?: string }) {

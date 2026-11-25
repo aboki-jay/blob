@@ -3,13 +3,17 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ORIGIN, PORT } from './origin.mjs';
 
 const root = fileURLToPath(new URL('../fixtures/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-const PORT = 4173;
 
 createServer(async (request, response) => {
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+  if (path === '/__blob-fixtures') {
+    response.writeHead(200, { 'content-type': 'text/plain' });
+    return response.end('ok');
+  }
   if (path === '/favicon.ico') {
     response.writeHead(204);
     return response.end();
@@ -24,4 +28,4 @@ createServer(async (request, response) => {
     response.writeHead(404, { 'content-type': 'text/plain' });
     response.end('Not found');
   }
-}).listen(PORT, '127.0.0.1', () => console.log(`Fixtures on http://127.0.0.1:${PORT}`));
+}).listen(PORT, '127.0.0.1', () => console.log(`Fixtures on ${ORIGIN}`));

@@ -42,11 +42,11 @@ Prefer small, readable modules over speculative abstractions. One extension proj
 
 ## Design references
 
-- Starting frames (welcome and empty states): https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=271-6323
-- Main design: https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=21-72
-- Additional screens and flows: https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=235-3203
+The on-page comment card (first comment, and reading or continuing a conversation from a pin) is in `overlay/tag.tsx`, styled by `overlay/tag.css`, from the Figma [Comment tags](https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=271-7345) section. Pins open this card, not the drawer.
 
-Inspect Figma read-only; never edit the file. If you cannot access it, say so and never claim to have inspected it. The additions page includes proposals, not a list of features to build immediately.
+The docked Blob tab is `EdgeTab` in `overlay/launcher.tsx`, styled by `overlay/launcher.css`. Keep `overlay/App.tsx` wired to this launcher. It replaces the old round `BlobButton`.
+
+Use the [Approved for Implementation page](https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=297-6696) as the design source. Review its Welcome and Empty state, Bottom navigation, Comment tags, Feedback, History and Activity sections against the corresponding rendered screens. Inspect Figma read-only. If access fails, say which frames could not be inspected. Keep signed-in examples within the milestone's account and privacy boundaries.
 
 Design tokens live at the top of `overlay/style.css` and mirror the Figma variables (primary `#623DF5`, Inter for body, Geist for headings). Keep the compact navigation rail, draggable Blob, pinned comments and drawer. No glass effect. Keep it usable at narrow widths and browser zoom.
 

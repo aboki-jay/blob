@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import laugh from '@/assets/icons/laugh.svg?raw';
 import { newId } from '@/lib/messages';
 import { hostLabel, type PageInfo } from '@/lib/page';
 import type { BlobData, Drafts, Thread } from '@/lib/types';
@@ -31,15 +32,14 @@ export function Welcome({ onContinue }: { onContinue: () => void }) {
         <div className="stack gap8">
           <h1 className="welcome__title">Leave a thought right where it belongs.</h1>
           <p className="t12 muted">
-            Add comments to the websites you visit. As a guest, your comments are saved on this device and only you can see
-            them.
+            Add comments to the websites you visit. Start as a guest to save your comments on this device.
           </p>
         </div>
         <div className="stack gap12" style={{ width: 'min(268px, 100%)' }}>
-          <Button variant="primary" block onClick={onContinue}>
+          <Button block disabled title="Accounts are unavailable in the local guest version">Sign in</Button>
+          <Button variant="soft" block onClick={onContinue}>
             Continue as a Guest
           </Button>
-          <p className="t12 faint">Signing in and sharing are not available yet.</p>
         </div>
       </div>
     </div>
@@ -66,11 +66,17 @@ function ThreadRow({
         <Avatar small />
         <span className="activity__main">
           <span className="activity__top">
-            <span className="medium grow clip">{lastEvent(thread)}</span>
+            <span className="medium clip">{lastEvent(thread)}</span>
+            <span className="anchor-tag clip" title={thread.anchor.label}><Icon svg={icons.file} />{thread.anchor.label}</span>
             <span className="muted">{shortTime(thread.updatedAt, now)}</span>
           </span>
           <span className="activity__preview">{last?.body}</span>
           <span className="muted clip">{detail}</span>
+          <span className="activity-peek" aria-hidden="true">
+            <span className="spread"><strong>Guest</strong><small>{shortTime(thread.updatedAt, now)}</small></span>
+            <span className="peek-body">{last?.body}</span>
+            <span className="peek-link">View blob <Icon svg={icons.chevron} /></span>
+          </span>
         </span>
       </button>
     </li>
@@ -90,7 +96,7 @@ function ByDay({ threads, render }: { threads: Thread[]; render: (thread: Thread
     <>
       {days.map((day) => (
         <section key={day.label} className="stack gap4" aria-label={day.label}>
-          <h3 className="group-label">{day.label}</h3>
+          <h3 className="day-label" data-today={day.label === 'Today'}>{day.label}</h3>
           <ul className="stack">{day.threads.map(render)}</ul>
         </section>
       ))}
@@ -101,19 +107,11 @@ function ByDay({ threads, render }: { threads: Thread[]; render: (thread: Thread
 function EmptyState({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
   return (
     <div className="empty empty--grow">
-      <div className="art" aria-hidden="true">
-        <div className="art__window">
-          <span className="art__dots">
-            <i />
-            <i />
-            <i />
-          </span>
-          <Icon svg={icons.mascot} />
-          <span className="art__lines">
-            <i />
-            <i />
-          </span>
+      <div className={'state-art ' + (title.startsWith('No Blobs') ? 'state-art--site' : '')} aria-hidden="true">
+        <div className="state-art__sheet">
+          {[0, 1, 2].map(row => <span key={row}><i /><b /></span>)}
         </div>
+        {title.startsWith('No Blobs') && <Icon svg={icons.mascot} />}
       </div>
       <div className="stack gap4">
         <p className="t16 medium">{title}</p>
@@ -158,10 +156,9 @@ export function Activity({
   };
 
   return (
-    <div className="pane">
+    <div className="pane activity-pane">
       <div className="stack gap8">
         <SiteCard inline title={title} detail={`${page.origin}${page.label === '/' ? '' : page.label}`} />
-        <StorageNote />
       </div>
       {onSite.length === 0 ? (
         <EmptyState
@@ -189,7 +186,7 @@ export function Activity({
               </span>
             </h2>
             {here.length === 0 ? (
-              <p className="t12 muted">No comments on this page yet. Your other comments on this website are below.</p>
+              <EmptyState title="No Activity yet" body="Comments on this page appear here after you leave a comment or reply." />
             ) : (
               <ByDay
                 threads={here}
@@ -224,6 +221,7 @@ export function History({
   page,
   tab,
   onTab,
+  onBack,
   onOpen,
   onAdd,
   onReopen,
@@ -232,6 +230,7 @@ export function History({
   page: PageInfo;
   tab: HistoryTab;
   onTab: (tab: HistoryTab) => void;
+  onBack: () => void;
   onOpen: (threadId: string) => void;
   onAdd: () => void;
   onReopen: (threadId: string) => Promise<boolean>;
@@ -241,26 +240,26 @@ export function History({
   const resolved = Object.values(data.threads)
     .filter((t) => t.status === 'resolved')
     .sort((a, b) => (b.resolvedAt ?? b.updatedAt).localeCompare(a.resolvedAt ?? a.updatedAt));
+  const [filterOpen, setFilterOpen] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
   return (
     <div className="pane">
-      <h1 className="heading">{tab === 'websites' ? 'History' : 'Resolved'}</h1>
-      <div className="tabs" role="tablist" aria-label="History views">
-        <button type="button" role="tab" className="tab" aria-selected={tab === 'websites'} onClick={() => onTab('websites')}>
-          Websites
-        </button>
-        <button type="button" role="tab" className="tab" aria-selected={tab === 'resolved'} onClick={() => onTab('resolved')}>
-          Resolved
+      <div className="history-head">
+        <button className="view-close" aria-label="Close history" onClick={onBack}><Icon svg={icons.x} /></button>
+        <h1 className="heading">History</h1>
+        <button className="filter-button" aria-expanded={filterOpen} onClick={() => setFilterOpen(!filterOpen)}>
+          <Icon svg={icons.filter} />{tab === 'resolved' ? 'Resolved' : 'Filter'}
         </button>
       </div>
-
+      {filterOpen && <div className="tabs" role="tablist" aria-label="History views">
+        {(['websites', 'resolved'] as const).map(value => <button key={value} role="tab" className="tab"
+          aria-selected={tab === value} onClick={() => { onTab(value); setFilterOpen(false); }}>
+          {value === 'websites' ? 'Websites' : 'Resolved'}
+        </button>)}
+      </div>}
       {tab === 'websites' ? (
         <>
-          <div className="stack gap8">
-            <p className="t12 muted">Websites you’ve commented on in this browser.</p>
-            <span className="chip">Guest · Local history</span>
-          </div>
           {sites.length === 0 ? (
             <EmptyState
               title="No history yet"
@@ -272,30 +271,17 @@ export function History({
               }
             />
           ) : (
-            sites.map((site) => (
-              <section key={site.origin} className="stack gap12" aria-label={site.host}>
-                <div className="card stack gap8">
-                  <p className="t16 medium clip">{site.title || site.host}</p>
-                  <p className="t12 muted clip">
-                    {site.host} · {plural(site.count, 'conversation')}
-                    {site.origin === page.origin ? ' · Current website' : ''}
-                  </p>
-                  <p className="t12 medium accent">Only you</p>
-                </div>
+            sites.map((site, index) => (
+              <section key={site.origin} className="history-site" aria-label={site.host}>
+                {(index === 0 || dayLabel(sites[index - 1]!.latest, now) !== dayLabel(site.latest, now)) &&
+                  <h3 className="day-label" data-today={dayLabel(site.latest, now) === 'Today'}>{dayLabel(site.latest, now)}</h3>}
+                <details>
+                  <summary><strong className="clip">{site.title || site.host}</strong><small className="clip">{site.host}</small></summary>
+                  <p className="t12 muted">{site.host} · {plural(site.count, 'conversation')}{site.origin === page.origin ? ' · Current website' : ''}</p>
                 {site.pages.map((group) => (
-                  <div key={group.page.key} className="stack gap4">
-                    <div className="group-label">
-                      <span className="clip">{pageName(group.page)}</span>
-                      {group.page.key === page.key ? (
-                        <span className="muted" style={{ fontWeight: 400, flex: 'none' }}>
-                          This page
-                        </span>
-                      ) : (
-                        <a className="link" style={{ flex: 'none' }} href={group.page.url} target="_blank" rel="noopener noreferrer">
-                          Open page
-                        </a>
-                      )}
-                    </div>
+                  <details key={group.page.key} className="history-page">
+                    <summary>{pageName(group.page)}</summary>
+                    {group.page.key !== page.key && <a className="link" href={group.page.url} target="_blank" rel="noopener noreferrer">Open page</a>}
                     <ul className="stack">
                       {group.threads.map((t) => (
                         <ThreadRow
@@ -307,9 +293,9 @@ export function History({
                         />
                       ))}
                     </ul>
-                  </div>
+                  </details>
                 ))}
-                <div className="divider" />
+                </details>
               </section>
             ))
           )}
@@ -400,7 +386,9 @@ export function ThreadView({
   const [action, setAction] = useState<{ failed?: string; confirmDelete?: boolean; busy?: boolean }>({});
   const messageId = useRef(newId());
   const end = useRef<HTMLDivElement>(null);
+  const replyBox = useRef<HTMLTextAreaElement>(null);
   const count = thread.messages.length;
+  const [showReplies, setShowReplies] = useState(true);
 
   // Keep the newest message and the reply box in view.
   // (Braces matter: newer browsers return a Promise from scrollIntoView, and an
@@ -421,6 +409,7 @@ export function ThreadView({
     if (result.ok) {
       messageId.current = newId();
       setText('');
+      setShowReplies(true);
       setPhase('idle');
     } else {
       setPhase('failed');
@@ -439,17 +428,17 @@ export function ThreadView({
   };
 
   return (
-    <div className="pane">
+    <div className="pane thread-pane">
       <button type="button" className="link back" onClick={onBack}>
         {backLabel}
       </button>
-      <h1 className="heading wrap">{thread.anchor.label}</h1>
-      <div className="card stack gap8">
-        <p className="t16 medium clip">{record?.title || hostLabel(thread.origin)}</p>
-        <p className="t12 muted clip">
-          {hostLabel(thread.origin)} · {record?.label ?? ''}
-        </p>
-        <StorageNote />
+      <div className="thread-target">
+        <h1 className="clip" title={thread.anchor.label}>Pinned to “{thread.anchor.label}”</h1>
+        <details><summary>Page details</summary>
+          <p>{record?.title || hostLabel(thread.origin)}</p>
+          <p>{hostLabel(thread.origin)} · {record?.label ?? ''}</p>
+          <StorageNote />
+        </details>
       </div>
 
       {unavailable && thread.status === 'open' && (
@@ -475,7 +464,7 @@ export function ThreadView({
 
       <ul className="stack gap8" aria-label="Messages">
         {thread.messages.map((message, index) => (
-          <li key={message.id} className="message">
+          <li key={message.id} className="message" hidden={index > 0 && !showReplies}>
             <div className="message__head">
               <Avatar small />
               <div className="stack gap4">
@@ -486,6 +475,16 @@ export function ThreadView({
               </div>
             </div>
             <p className="wrap">{message.body}</p>
+            {thread.status === 'open' && <div className="message-tools">
+              <button type="button" disabled aria-label="Reactions unavailable" title="Reactions are unavailable"><Icon svg={laugh} /></button>
+              <button type="button" onClick={() => replyBox.current?.focus()}>Reply</button>
+            </div>}
+            {index === 0 && count > 1 && <button type="button" className="thread-replies" aria-expanded={showReplies}
+              onClick={() => setShowReplies(!showReplies)}>
+              <Avatar small />{count - 1} {count === 2 ? 'reply' : 'replies'}
+              <small>Last reply {shortTime(thread.messages[count - 1]!.createdAt, now)}</small>
+              <Icon svg={icons.chevron} />
+            </button>}
           </li>
         ))}
       </ul>
@@ -547,12 +546,14 @@ export function ThreadView({
 
       {thread.status === 'open' && (
         <div className="stack gap8" style={{ marginTop: 'auto' }}>
-          <div className="field">
+          <div className="composer__entry reply-entry">
+            <Avatar small />
             <textarea
-              rows={4}
+              ref={replyBox}
+              rows={1}
               value={text}
               maxLength={5000}
-              placeholder={count > 1 ? 'Write a reply…' : 'Add another thought…'}
+              placeholder="Add a comment"
               aria-label="Reply"
               aria-invalid={emptyReply}
               onChange={(event) => {
@@ -566,7 +567,10 @@ export function ThreadView({
                 }
               }}
             />
-            <p className={phase === 'failed' || emptyReply ? 'danger' : 'muted'} role="status" aria-live="polite">
+            <button className="send-arrow" aria-label={phase === 'failed' ? 'Try again' : 'Send reply'}
+              disabled={phase === 'saving'} onClick={() => void sendReply()}><Icon svg={icons.sendArrow} /></button>
+          </div>
+            <p className={phase === 'failed' || emptyReply ? 'danger t12' : 'sr-only'} role="status" aria-live="polite">
               {emptyReply
                 ? 'Write a reply first.'
                 : phase === 'failed'
@@ -575,13 +579,7 @@ export function ThreadView({
                     ? 'Saving…'
                     : 'Only you · Saved on this device'}
             </p>
-          </div>
-          <div className="spread">
-            <span className="t12 muted">Enter to send · Shift + Enter for a new line</span>
-            <Button onClick={() => void sendReply()} disabled={phase === 'saving'}>
-              {phase === 'failed' ? 'Try again' : 'Send reply'}
-            </Button>
-          </div>
+
         </div>
       )}
       <div ref={end} />

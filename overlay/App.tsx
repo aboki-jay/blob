@@ -4,8 +4,10 @@ import { newId } from '@/lib/messages';
 import { siteEnabled, type PageInfo } from '@/lib/page';
 import type { AnchorDescriptor } from '@/lib/types';
 import { send, useDraft, useStored, type Stored } from './client';
-import { Bar, BlobButton, Composer, Drawer, Outline, Picker, Pin, type SavePhase, type Section } from './components';
+import { Bar, Drawer, GuestNav, Outline, Picker, Pin, type SavePhase, type Section } from './components';
 import { useAnchors, useEscape, usePage } from './hooks';
+import { EdgeTab, sideOf } from './launcher';
+import { NewCommentTag, ThreadTag } from './tag';
 import { Button, Notice } from './ui';
 import { Activity, History, ThreadView, Welcome, type HistoryTab } from './views';
 
@@ -87,6 +89,7 @@ function PageLayer({
   const [phase, setPhase] = useState<SavePhase>('idle');
   const [pending, setPending] = useState<{ threadId: string; anchor: AnchorDescriptor; element: Element; failed?: boolean } | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [tagId, setTagId] = useState<string | null>(null);
   const [spot, setSpot] = useState<string | null>(null);
   const [draft, setDraft] = useDraft(`new:${page.key}`, drafts, loaded);
   const blobRef = useRef<HTMLButtonElement>(null);
@@ -108,7 +111,18 @@ function PageLayer({
     requestAnimationFrame(() => blobRef.current?.focus());
   }, [setOpen]);
 
+  /** Opens the comment tag next to a pin, on the page itself. */
+  const openTag = (threadId: string) => {
+    setOpen(false);
+    setComposer(null);
+    setSaved(null);
+    setSpot(null);
+    setTagId(threadId);
+  };
+
+  /** Opens a conversation in the drawer. */
   const openThread = (threadId: string, from: 'activity' | 'history' | 'resolved' = 'activity') => {
+    setTagId(null);
     setView({ name: 'thread', threadId, from });
     setSaved(null);
     setSpot(null);
@@ -128,6 +142,7 @@ function PageLayer({
   const startSelecting = () => {
     setOpen(false);
     setComposer(null);
+    setTagId(null);
     setSaved(null);
     setSpot(null);
     setMode({ kind: 'select' });
@@ -142,6 +157,7 @@ function PageLayer({
         // Ids are made once, here. Retrying a failed save reuses them, so the
         // same comment can never be stored twice.
         setComposer({ threadId: newId(), messageId: newId(), anchor, element });
+        setTagId(null);
         setPhase('idle');
       }
       setMode({ kind: 'idle' });
@@ -162,10 +178,12 @@ function PageLayer({
       body: draft,
     });
     if (result.ok) {
+      // The card stays where it is and now shows the saved comment.
       setComposer(null);
       setPhase('idle');
       setDraft('');
       setSaved(composer.threadId);
+      setTagId(composer.threadId);
     } else {
       setPhase('failed');
     }
@@ -189,10 +207,11 @@ function PageLayer({
     if (threadId) setOpen(true);
   };
 
-  useEscape(mode.kind !== 'idle' || !!pending || !!composer || open, (inBlob) => {
+  useEscape(mode.kind !== 'idle' || !!pending || !!composer || !!tagId || open, (inBlob) => {
     if (mode.kind === 'select') setMode({ kind: 'idle' });
     else if (mode.kind === 'reattach' || pending) cancelReattach();
     else if (composer) setComposer(null);
+    else if (tagId && !open) setTagId(null);
     // With only the drawer open, leave Escape to the page unless focus is in Blob.
     else if (open && inBlob) closeDrawer();
     else return false;
@@ -256,6 +275,7 @@ function PageLayer({
         data={data}
         page={page}
         tab={view.tab}
+        onBack={() => setView({ name: 'activity' })}
         onTab={(tab) => setView({ name: 'history', tab })}
         onOpen={(id) => openThread(id, view.tab === 'resolved' ? 'resolved' : 'history')}
         onAdd={startSelecting}
@@ -276,10 +296,13 @@ function PageLayer({
   }
 
   const spotElement = spot ? located[spot]?.element : undefined;
+  // The tag shows an open conversation on this page whose element can be found.
+  const tagThread = tagId && !open && mode.kind === 'idle' && !composer && !pending ? data.threads[tagId] : undefined;
+  const tagElement = tagThread?.status === 'open' ? located[tagThread.id]?.element : undefined;
   const savedThread = saved ? data.threads[saved] : undefined;
 
   return (
-    <div className="root">
+    <div className="root" data-side={sideOf(settings.blobPosition)}>
       {mode.kind !== 'idle' && (
         <Picker hint={mode.kind === 'reattach' ? 'Click to move the comment here' : 'Click to pin your comment here'} onPick={onPick} />
       )}
@@ -294,8 +317,8 @@ function PageLayer({
             y={place.position.y}
             number={t.number}
             label={t.anchor.label}
-            active={spot === t.id || (open && view.name === 'thread' && view.threadId === t.id)}
-            onOpen={() => openThread(t.id)}
+            active={spot === t.id || tagThread?.id === t.id || (open && view.name === 'thread' && view.threadId === t.id)}
+            onOpen={() => openTag(t.id)}
           />
         );
       })}
@@ -305,10 +328,9 @@ function PageLayer({
       {spotElement && <Outline element={spotElement} pulse />}
 
       {composer && (
-        <Composer
+        <NewCommentTag
           element={composer.element}
           anchor={composer.anchor}
-          pageLabel={page.label}
           text={draft}
           onText={setDraft}
           phase={phase}
@@ -318,7 +340,11 @@ function PageLayer({
       )}
 
       {mode.kind === 'select' && (
-        <Bar actions={<Button variant="text" onClick={() => setMode({ kind: 'idle' })}>Cancel</Button>}>Only you · Guest</Bar>
+        <GuestNav onExit={() => setMode({ kind: 'idle' })} onResolved={() => {
+          setMode({ kind: 'idle' });
+          setView({ name: 'history', tab: 'resolved' });
+          setOpen(true);
+        }} />
       )}
       {mode.kind === 'reattach' && (
         <Bar actions={<Button variant="text" onClick={cancelReattach}>Cancel</Button>}>Choose a new location for this comment</Bar>
@@ -337,12 +363,16 @@ function PageLayer({
           {pending.failed ? 'Couldn’t save the new location.' : `Move this comment to ${pending.anchor.label}?`}
         </Bar>
       )}
-      {mode.kind === 'idle' && !pending && !composer && !open && savedThread && (
+      {tagThread && tagElement && (
+        <ThreadTag key={tagThread.id} element={tagElement} thread={tagThread} drafts={drafts} loaded={loaded} onClose={() => setTagId(null)} />
+      )}
+
+      {mode.kind === 'idle' && !pending && !composer && !open && !tagElement && savedThread && (
         <Bar actions={<Button variant="text" onClick={() => openThread(savedThread.id)}>Open conversation</Button>}>
           Guest · Saved on this device
         </Bar>
       )}
-      {mode.kind === 'idle' && !pending && !composer && !open && spot && data.threads[spot] && (
+      {mode.kind === 'idle' && !pending && !composer && !open && !tagElement && spot && data.threads[spot] && (
         <Bar actions={<Button variant="text" onClick={() => openThread(spot)}>Open conversation</Button>}>
           {data.threads[spot]!.anchor.label}
         </Bar>
@@ -357,12 +387,13 @@ function PageLayer({
           {content}
         </Drawer>
       ) : (
-        <BlobButton
+        <EdgeTab
           buttonRef={blobRef}
           position={settings.blobPosition}
           count={openCount}
           onOpen={() => {
             setMode({ kind: 'idle' });
+            setTagId(null);
             setOpen(true);
           }}
           onMove={(blobPosition) => void send({ type: 'settings/set', settings: { blobPosition } })}

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { OVERLAY_TAG } from '@/lib/anchor';
 import type { AnchorDescriptor } from '@/lib/types';
-import { Avatar, Button, Icon, icons } from './ui';
+import { Feedback } from './feedback';
+import { Avatar, Icon, StorageNote, icons } from './ui';
 
 const viewport = () => ({ w: document.documentElement.clientWidth || innerWidth, h: innerHeight });
 const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min), Math.max(min, max));
@@ -110,31 +111,46 @@ export function BlobButton({
 export type Section = 'activity' | 'history';
 
 export function Drawer({
+  tag,
   section,
   onSection,
   onClose,
   children,
 }: {
+  tag?: Element | null;
   section: Section | null;
   onSection: (section: Section) => void;
   onClose: () => void;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [feedback, setFeedback] = useState(false);
+  const [theme, setTheme] = useState('Light');
+  const profile = useRef<HTMLDetailsElement>(null);
+  const navigate = (next: Section) => {
+    setFeedback(false);
+    if (profile.current) profile.current.open = false;
+    onSection(next);
+  };
   useEffect(() => ref.current?.focus(), []);
+  const rect = tag?.getBoundingClientRect();
+  const tagStyle = rect ? {
+    left: clamp(rect.left, 8, viewport().w - Math.min(450, viewport().w - 16) - 8),
+    top: clamp(rect.bottom + 12, 8, viewport().h - Math.min(500, viewport().h - 16) - 8),
+  } : undefined;
   return (
-    <div ref={ref} className="drawer" role="dialog" aria-label="Blob" tabIndex={-1}>
+    <div ref={ref} className={tag ? 'drawer thread-tag' : 'drawer'} style={tagStyle} data-theme={theme} role="dialog" aria-label="Blob" tabIndex={-1}>
       <div className="drawer__header">
         <div className="drawer__title">
           <Icon svg={icons.mascot} />
-          <span className="clip">Blob: Collaborative comment for webpage</span>
+          <span className="clip">{tag ? 'Comment' : 'Blob: Collaborative comment for webpage'}</span>
         </div>
         <button type="button" className="drawer__close" aria-label="Close Blob" onClick={onClose}>
           <Icon svg={icons.x} />
         </button>
       </div>
       <div className="drawer__body">
-        {children}
+        {feedback ? <Feedback onBack={() => setFeedback(false)} /> : children}
         <nav className="rail" aria-label="Blob sections">
           <button
             type="button"
@@ -143,7 +159,7 @@ export function Drawer({
             title="History"
             aria-current={section === 'history' ? 'page' : undefined}
             disabled={section === null}
-            onClick={() => onSection('history')}
+            onClick={() => navigate('history')}
           >
             <Icon svg={section === 'history' ? icons.historyActive : icons.history} />
           </button>
@@ -156,7 +172,7 @@ export function Drawer({
               title="Comments on this website"
               aria-current={section === 'activity' ? 'page' : undefined}
               disabled={section === null}
-              onClick={() => onSection('activity')}
+              onClick={() => navigate('activity')}
             >
               <span>
                 <Icon svg={section === 'activity' ? icons.messageActive : icons.message} />
@@ -174,10 +190,20 @@ export function Drawer({
               </span>
             </button>
           </div>
-          <span title="Guest. Your comments are stored on this device.">
-            <Avatar />
-            <span className="sr-only">Guest. Your comments are stored on this device.</span>
-          </span>
+          <details className="profile" ref={profile}>
+            <summary aria-label="Guest profile"><Avatar /></summary>
+            <div className="profile-menu">
+              <div className="profile-id"><Avatar small /><div><strong>Guest</strong><p>Stored on this device</p></div></div>
+              <details className="profile-settings"><summary><Icon svg={icons.settings} />Settings</summary><StorageNote /></details>
+              <button onClick={() => { setFeedback(true); if (profile.current) profile.current.open = false; }}>
+                <Icon svg={icons.message} />Feedback
+              </button>
+              <div className="theme-choices" aria-label="Appearance">
+                {['Dark', 'Light', 'System'].map(value => <button key={value} aria-pressed={theme === value}
+                  onClick={() => setTheme(value)}>{value}</button>)}
+              </div>
+            </div>
+          </details>
         </nav>
       </div>
     </div>
@@ -281,6 +307,22 @@ export function Bar({ children, actions }: { children: ReactNode; actions: React
   );
 }
 
+/** Guest navigation while choosing a comment location. */
+export function GuestNav({ onExit, onResolved }: { onExit: () => void; onResolved: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  return <nav className="bar guest-nav" aria-label="Comment tools">
+    <Icon svg={icons.mascot} className="nav-mascot" />
+    <span className="nav-current" title="Comment"><Icon svg={icons.commentMode} />{expanded && 'Comment'}</span>
+    <button disabled aria-label="Inbox unavailable for guests" title="Inbox unavailable for guests"><Icon svg={icons.message} /></button>
+    <button aria-label="Resolved conversations" title="Resolved" onClick={onResolved}><Icon svg={icons.resolved} />{expanded && 'Resolved'}</button>
+    <span className="nav-avatar" title="Guest"><Avatar small /></span>
+    <button aria-label="Cancel" title="Exit comment mode" onClick={onExit}>Exit</button>
+    <button aria-expanded={expanded} aria-label={expanded ? 'Collapse tools' : 'Expand tools'} onClick={() => setExpanded(!expanded)}>
+      <Icon svg={icons.chevron} />
+    </button>
+  </nav>;
+}
+
 /** A ring around an element on the page. */
 export function Outline({ element, pulse }: { element: Element; pulse?: boolean }) {
   const rect = element.getBoundingClientRect();
@@ -350,23 +392,21 @@ export function Composer({
 
   return (
     <div ref={ref} className="composer" style={{ left, top }} role="dialog" aria-label="New comment">
-      <div className="spread">
+      <div className="composer__header spread">
         <p className="medium">New comment</p>
         <button type="button" className="icon-btn" aria-label="Close new comment" onClick={onClose}>
           <Icon svg={icons.x} />
         </button>
       </div>
-      <p className="t12 muted clip">
-        Pinned to {anchor.label} · {pageLabel}
-      </p>
-      <p className="t12 medium accent">Only you · Guest</p>
-      <div className="composer__box">
+      <p className="composer__target clip" title={pageLabel}>Pinned to “{anchor.label}”</p>
+      <div className="composer__entry">
+        <span title="Only you · Guest"><Avatar small /><span className="sr-only">Only you · Guest</span></span>
         <textarea
           ref={input}
-          rows={4}
+          rows={1}
           value={text}
           maxLength={5000}
-          placeholder="Write a comment…"
+          placeholder="Add a comment"
           aria-label="Comment"
           aria-invalid={empty}
           onChange={(event) => {
@@ -380,15 +420,10 @@ export function Composer({
             }
           }}
         />
+        <button type="button" className="send-arrow" onClick={submit} disabled={phase === 'saving'}
+          aria-label={phase === 'failed' ? 'Try again' : 'Post comment'}><Icon svg={icons.sendArrow} /></button>
       </div>
-      <div className="spread">
-        <p className={`t12 ${phase === 'failed' || empty ? 'danger' : 'muted'}`} role="status" aria-live="polite">
-          {status}
-        </p>
-        <Button onClick={submit} disabled={phase === 'saving'}>
-          {phase === 'failed' ? 'Try again' : phase === 'saving' ? 'Saving…' : 'Post comment'}
-        </Button>
-      </div>
+      <p className={empty || phase !== 'idle' || text.trim() ? 'composer__status t12' : 'sr-only'} role="status">{status}</p>
     </div>
   );
 }

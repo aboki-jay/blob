@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { HOST, ORIGIN } from './origin.mjs';
 import { test as base, chromium, expect, type BrowserContext, type Page, type Worker } from '@playwright/test';
 
 /**
@@ -85,13 +86,13 @@ const test = base.extend<{ driver: Driver }>({
   context: async ({ browser }, use) => {
     let context: BrowserContext;
     if (HARNESS) {
-      context = await browser.newContext({ viewport: VIEWPORT, baseURL: 'http://127.0.0.1:4173' });
+      context = await browser.newContext({ viewport: VIEWPORT, baseURL: ORIGIN });
       await context.addInitScript({ path: out('harness/harness.js') });
     } else {
       context = await chromium.launchPersistentContext('', {
         channel: 'chromium',
         viewport: VIEWPORT,
-        baseURL: 'http://127.0.0.1:4173',
+        baseURL: ORIGIN,
         args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`],
       });
     }
@@ -118,7 +119,9 @@ const test = base.extend<{ driver: Driver }>({
 const blob = (page: Page) => page.locator('blob-overlay .blob');
 const drawer = (page: Page) => page.locator('blob-overlay .drawer');
 const pins = (page: Page) => page.locator('blob-overlay .pin');
-const composer = (page: Page) => page.locator('blob-overlay .composer');
+/** The comment card on the page: used both to write a first comment and to read a conversation. */
+const composer = (page: Page) => page.locator('blob-overlay .comment-tag');
+const tag = composer;
 
 async function continueAsGuest(page: Page) {
   await blob(page).click();
@@ -146,7 +149,10 @@ async function comment(page: Page, selector: string, text: string) {
   await pick(page, selector);
   await page.getByRole('textbox', { name: 'Comment' }).fill(text);
   await page.getByRole('button', { name: 'Post comment' }).click();
-  await expect(composer(page)).toBeHidden();
+  // The card stays open and now shows the saved comment.
+  await expect(tag(page).locator('.tag-comment')).toContainText(text);
+  await page.getByRole('button', { name: 'Close comment', exact: true }).click();
+  await expect(tag(page)).toBeHidden();
 }
 
 const threads = async (driver: Driver, page: Page) =>
@@ -185,24 +191,41 @@ test('guest journey: comment, reload, reply, resolve, reopen', async ({ page, dr
   await page.getByRole('textbox', { name: 'Comment' }).fill('Could we give this button more room?');
   await expect(composer(page)).toContainText('Draft kept in this browser');
   await page.getByRole('button', { name: 'Post comment' }).click();
-  await expect(page.getByText('Guest · Saved on this device')).toBeVisible();
+  // The card stays open and shows the saved comment; a pin appears on the button.
+  await expect(tag(page).locator('.tag-comment')).toHaveCount(1);
+  await expect(tag(page)).toContainText('Could we give this button more room?');
   await expect(pins(page)).toHaveCount(1);
   expect(await pinGap(page, '#hero')).toBeLessThan(3);
 
-  // After a reload the pin is back and opens the same conversation.
+  // After a reload the pin is back and opens the same conversation on the page.
   await driver.reload(page);
   await expect(pins(page)).toHaveCount(1);
   await pins(page).click();
-  await expect(drawer(page)).toContainText('Could we give this button more room?');
-  await expect(drawer(page)).toContainText('Only you · Stored on this device');
-  await expect(drawer(page)).toContainText('Studio — Example website');
+  await expect(tag(page)).toContainText('Pinned to Button “Explore our work”');
+  await expect(tag(page)).toContainText('Could we give this button more room?');
+  await expect(tag(page)).toContainText('Just now');
 
-  // Reply locally.
-  await page.getByRole('textbox', { name: 'Reply' }).fill('Looks better already.');
-  await page.getByRole('textbox', { name: 'Reply' }).press('Enter');
-  await expect(drawer(page).locator('.message')).toHaveCount(2);
-  await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveValue('');
-  await expect(page.getByRole('textbox', { name: 'Reply' })).toBeInViewport();
+  // Add a second comment, then reply to the first one.
+  await page.getByRole('textbox', { name: 'Comment' }).fill('Looks better already.');
+  await page.getByRole('textbox', { name: 'Comment' }).press('Enter');
+  await expect(tag(page).locator('.tag-comment')).toHaveCount(2);
+  await expect(page.getByRole('textbox', { name: 'Comment' })).toHaveValue('');
+  await tag(page).locator('.tag-comment').first().hover();
+  await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
+  await page.getByRole('textbox', { name: 'Comment' }).fill('Agreed.');
+  await page.getByRole('button', { name: 'Send reply' }).click();
+  await expect(tag(page)).toContainText('1 reply');
+  await expect(tag(page).locator('.tag-replies .tag-comment')).toHaveCount(1);
+  await expect(page.getByRole('textbox', { name: 'Comment' })).toBeInViewport();
+
+  // The same conversation, in the drawer.
+  await page.keyboard.press('Escape');
+  await expect(tag(page)).toBeHidden();
+  await blob(page).click();
+  await page.getByRole('button', { name: /Agreed\./ }).click();
+  await expect(drawer(page)).toContainText('Could we give this button more room?');
+  await expect(drawer(page)).toContainText('Studio — Example website');
+  await expect(drawer(page).locator('.message')).toHaveCount(3);
 
   // Resolve: the pin goes, the conversation stays and is listed under Resolved.
   await page.getByRole('button', { name: 'Resolve', exact: true }).click();
@@ -211,15 +234,16 @@ test('guest journey: comment, reload, reply, resolve, reopen', async ({ page, dr
   await page.getByRole('button', { name: 'Back to activity' }).click();
   await page.getByRole('button', { name: /^Resolved/ }).click();
   await expect(drawer(page)).toContainText('Completed conversations stay here until you reopen them.');
-  await expect(drawer(page)).toContainText('Looks better already.');
+  await expect(drawer(page)).toContainText('Agreed.');
 
-  // Reopen: it returns with both messages.
+  // Reopen: it returns with every message.
   await page.getByRole('button', { name: /^Reopen conversation/ }).click();
   await expect(drawer(page)).toContainText('No resolved conversations');
   await expect(pins(page)).toHaveCount(1);
   const [thread] = await threads(driver, page);
-  expect(thread).toMatchObject({ status: 'open', pageKey: 'http://127.0.0.1:4173/', number: 1 });
-  expect(thread.messages).toHaveLength(2);
+  expect(thread).toMatchObject({ status: 'open', pageKey: `${ORIGIN}/`, number: 1 });
+  expect(thread.messages).toHaveLength(3);
+  expect(thread.messages[2].replyTo).toBe(thread.messages[0].id);
 });
 
 test('pages on the same website stay separate, and History groups them', async ({ page, driver }) => {
@@ -237,10 +261,14 @@ test('pages on the same website stay separate, and History groups them', async (
   await expect(drawer(page).getByLabel(/^Other pages on/)).toContainText('Home page comment');
 
   await page.getByRole('button', { name: 'History' }).click();
-  await expect(drawer(page)).toContainText('127.0.0.1:4173 · 2 conversations · Current website');
+  const site = drawer(page).locator('.history-site > details');
+  await expect(site).not.toHaveAttribute('open', '');
+  await site.locator(':scope > summary').click();
+  await expect(site.locator('.history-page > summary')).toHaveCount(2);
+  await expect(drawer(page)).toContainText(`${HOST} · 2 conversations · Current website`);
   await expect(drawer(page)).toContainText('Pricing — Example website · /pricing.html');
   await expect(drawer(page)).toContainText('Studio — Example website · /');
-  expect((await threads(driver, page)).map((t) => t.pageKey).sort()).toEqual(['http://127.0.0.1:4173/', 'http://127.0.0.1:4173/pricing.html']);
+  expect((await threads(driver, page)).map((t) => t.pageKey).sort()).toEqual([`${ORIGIN}/`, `${ORIGIN}/pricing.html`]);
 
   // Back on the home page only its own pin shows.
   await driver.open(page);
@@ -329,7 +357,7 @@ test('a failed save keeps the draft, says so, and a retry saves once', async ({ 
 
   await driver.failWrites(page, false);
   await page.getByRole('button', { name: 'Try again' }).click();
-  await expect(composer(page)).toBeHidden();
+  await expect(tag(page).locator('.tag-comment')).toHaveCount(1);
   await expect(pins(page)).toHaveCount(1);
   const saved = await threads(driver, page);
   expect(saved).toHaveLength(1);
@@ -369,33 +397,79 @@ test('single-page app navigation: no stale pins, one overlay', async ({ page, dr
   await expect(page.locator('blob-overlay')).toHaveCount(1);
 });
 
-test('the Blob button: click opens, drag moves, position is remembered and stays on screen', async ({ page, driver }) => {
+test('the Blob tab: docked to an edge, slides out, click opens, drag moves, position is remembered', async ({ page, driver }) => {
   await driver.open(page);
-  const before = (await blob(page).boundingBox())!;
-  await page.mouse.move(before.x + 28, before.y + 28);
+  const tab = blob(page);
+  const width = page.viewportSize()!.width;
+  const box = async () => (await tab.boundingBox())!;
+  /** How far the tab pokes past the outer edge of its slot, where it is cut off. */
+  const tuckedBy = async () => {
+    const slot = (await page.locator('blob-overlay .edge-slot').boundingBox())!;
+    const b = await box();
+    return b.x + b.width - (slot.x + slot.width);
+  };
+
+  // Docked to the right edge. Once it has said hello it tucks away, still peeking.
+  await expect(tab).toHaveAttribute('data-side', 'right');
+  await expect(tab).not.toHaveClass(/edge-tab--out/, { timeout: 8000 });
+  await expect.poll(tuckedBy).toBeGreaterThan(10);
+  expect((await box()).x).toBeLessThan(width - 20);
+
+  // It slides fully out when the pointer comes near.
+  await page.mouse.move(width - 70, (await box()).y + 48);
+  await expect(tab).toHaveClass(/edge-tab--out/);
+  await expect.poll(tuckedBy).toBeLessThan(1);
+
+  // Dragging moves it along the edge, and a drag is not a click.
+  const out = await box();
+  await page.mouse.move(out.x + out.width / 2, out.y + out.height / 2);
   await page.mouse.down();
-  await page.mouse.move(before.x - 300, before.y - 250, { steps: 8 });
+  await page.mouse.move(out.x + out.width / 2 - 8, out.y + out.height / 2 - 250, { steps: 8 });
   await page.mouse.up();
-  await expect(drawer(page)).toBeHidden(); // a drag is not a click
-  const moved = (await blob(page).boundingBox())!;
-  expect(Math.abs(moved.x - (before.x - 328))).toBeLessThan(3);
-  expect(Math.abs(moved.y - (before.y - 278))).toBeLessThan(3);
+  await expect(drawer(page)).toBeHidden();
+  const moved = await box();
+  expect(Math.abs(moved.y - (out.y - 250))).toBeLessThan(3);
+  await expect(tab).toHaveAttribute('data-side', 'right');
 
+  // Dragging it across the page docks it to the other edge.
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(80, moved.y + moved.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect(tab).toHaveAttribute('data-side', 'left');
+  await expect.poll(async () => Math.abs((await box()).x)).toBeLessThan(2);
+
+  // The edge and height are remembered.
   await driver.reload(page);
-  await expect(blob(page)).toBeVisible();
-  await expect.poll(async () => Math.abs((await blob(page).boundingBox())!.x - moved.x)).toBeLessThan(3);
+  await expect(tab).toHaveAttribute('data-side', 'left');
+  await expect.poll(async () => Math.abs((await box()).y - moved.y)).toBeLessThan(3);
 
+  // In a small window it still fits, and keyboard focus brings it fully into view.
   await page.setViewportSize({ width: 420, height: 380 });
-  await expect(blob(page)).toBeInViewport({ ratio: 1 });
+  await tab.focus();
+  await expect(tab).toBeInViewport({ ratio: 1 });
 
-  // Keyboard: Enter opens, Escape closes and returns focus to the button.
-  await blob(page).focus();
+  // Keyboard: Enter opens, Escape closes and returns focus to the tab.
   await page.keyboard.press('Enter');
   await expect(drawer(page)).toBeVisible();
   await expect(drawer(page)).toBeInViewport({ ratio: 1 });
   await page.keyboard.press('Escape');
   await expect(drawer(page)).toBeHidden();
-  await expect(blob(page)).toBeFocused();
+  await expect(tab).toBeFocused();
+});
+
+test('the Blob tab keeps clear of scrollbars', async ({ page, driver }) => {
+  const slotRight = async () => {
+    const box = (await page.locator('blob-overlay .edge-slot').boundingBox())!;
+    return page.viewportSize()!.width - (box.x + box.width);
+  };
+  // A page with nothing to scroll: flush against the edge.
+  await driver.open(page, '/demo.html');
+  expect(await slotRight()).toBeLessThan(1);
+  // A page that scrolls: room is left for the scrollbar, and the tucked part is cut off there.
+  await driver.open(page, '/');
+  await expect.poll(slotRight).toBeGreaterThan(8);
+  expect(await page.locator('blob-overlay .edge-slot').evaluate((el) => getComputedStyle(el).clipPath)).toContain('inset');
 });
 
 test('the page’s styles do not leak into Blob', async ({ page, driver }) => {
@@ -419,8 +493,12 @@ test('deleting asks first, then removes the conversation and its replies', async
   await continueAsGuest(page);
   await comment(page, '#hero', 'Delete me');
   await pins(page).click();
-  await page.getByRole('textbox', { name: 'Reply' }).fill('A reply');
-  await page.getByRole('button', { name: 'Send reply' }).click();
+  await page.getByRole('textbox', { name: 'Comment' }).fill('A reply');
+  await page.getByRole('button', { name: 'Add comment' }).click();
+  await expect(tag(page).locator('.tag-comment')).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await blob(page).click();
+  await page.getByRole('button', { name: /A reply/ }).click();
   await expect(drawer(page).locator('.message')).toHaveCount(2);
 
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
@@ -456,4 +534,27 @@ test('the popup explains pages Blob cannot run on', async ({ page, context }) =>
   await expect(page.getByText('Blob can’t run on this page')).toBeVisible();
   await expect(page.getByText('No comments yet')).toBeVisible();
   await expect(page.locator('blob-overlay')).toHaveCount(0);
+});
+test('approved guest screens fit a narrow viewport and feedback stays local', async ({ page, driver }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await driver.open(page);
+  await blob(page).click();
+  await expect(drawer(page).getByRole('button', { name: 'Sign in', exact: true })).toBeDisabled();
+  await drawer(page).getByLabel('Guest profile').click();
+  await drawer(page).getByRole('button', { name: 'Dark', exact: true }).click();
+  await expect(drawer(page)).toHaveAttribute('data-theme', 'Dark');
+  await drawer(page).getByRole('button', { name: 'Feedback' }).click();
+  await drawer(page).getByRole('button', { name: 'Good' }).click();
+  await expect(drawer(page).getByRole('button', { name: 'Good' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(drawer(page).getByRole('button', { name: 'Submit' })).toBeDisabled();
+  await drawer(page).getByLabel('Close feedback').click();
+  await drawer(page).getByRole('button', { name: 'Continue as a Guest' }).click();
+  await page.getByRole('button', { name: 'Add a Blob' }).click();
+  const nav = page.getByRole('navigation', { name: 'Comment tools' });
+  await nav.getByRole('button', { name: 'Expand tools' }).click();
+  const box = await nav.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+  await nav.getByRole('button', { name: 'Resolved conversations' }).click();
+  await expect(drawer(page).getByText('No resolved conversations')).toBeVisible();
 });

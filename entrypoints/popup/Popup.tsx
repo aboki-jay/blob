@@ -1,3 +1,4 @@
+import warningArt from '@/assets/icons/warning.svg?raw';
 import { useEffect, useState } from 'react';
 import type { Request, Response } from '@/lib/messages';
 import { getPageInfo, hostLabel, originPattern, type PageInfo } from '@/lib/page';
@@ -133,7 +134,8 @@ export function Popup() {
       </header>
 
       {status.kind === 'unsupported' ? (
-        <section className="notice" role="status">
+        <section className="restricted-state" role="status">
+          <div className="restricted-art" aria-hidden="true"><i /><Icon svg={warningArt} /><b /></div>
           <p className="strong">Blob can’t run on this page</p>
           <p>
             Chrome doesn’t let extensions add comments to browser pages, the Chrome Web Store, PDFs or local files. Open an
