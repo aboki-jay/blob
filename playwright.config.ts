@@ -6,6 +6,8 @@ export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 45_000,
   workers: 1,
+  // On CI a test that fails once and then passes is reported as "flaky", not hidden.
+  retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: { baseURL: 'http://127.0.0.1:4173' },
   webServer: {

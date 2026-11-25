@@ -43,8 +43,12 @@ export function App({ host, commands, onUnmount }: Props) {
   const wasEnabled = useRef(false);
   useEffect(() => {
     if (!stored.loaded) return;
-    if (wasEnabled.current && !enabled) onUnmount();
+    const lostAccess = wasEnabled.current && !enabled;
     wasEnabled.current = enabled;
+    if (!lostAccess) return;
+    // Not from inside React's own update: let this one finish, then leave.
+    const timer = setTimeout(onUnmount, 0);
+    return () => clearTimeout(timer);
   }, [enabled, stored.loaded, onUnmount]);
 
   if (!page) return null;
@@ -87,8 +91,13 @@ function PageLayer({
   const [draft, setDraft] = useDraft(`new:${page.key}`, drafts, loaded);
   const blobRef = useRef<HTMLButtonElement>(null);
 
+  // Sorted by pin number. Chrome's storage does not keep the order things were
+  // saved in, so without this the pins' keyboard order would be arbitrary.
   const pageThreads = useMemo(
-    () => Object.values(data.threads).filter((thread) => thread.pageKey === page.key),
+    () =>
+      Object.values(data.threads)
+        .filter((thread) => thread.pageKey === page.key)
+        .sort((a, b) => a.number - b.number),
     [data, page.key],
   );
   const located = useAnchors(pageThreads);

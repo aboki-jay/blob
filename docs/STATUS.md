@@ -2,7 +2,7 @@
 
 Last updated: 25 November 2026
 
-Milestone 1 (local guest experience) is implemented. Its automated checks pass. **It has not yet been run as an installed extension in Chrome**, so the toolbar popup, Chrome's permission prompt and real `chrome.storage` are unverified. Doing that is the next task.
+Milestone 1 (local guest experience) is implemented and its automated checks pass, including browser tests against the real extension on CI. **Nobody has yet used it by hand as an installed extension in Chrome**, so the toolbar click and Chrome's permission prompt are unverified. Doing that is the next task.
 
 ## What works
 
@@ -25,11 +25,11 @@ Milestone 1 (local guest experience) is implemented. Its automated checks pass. 
 | `npm run build` | Production build succeeds. |
 | `npm run check:manifest` | Generated manifest asks only for `activeTab`, `scripting`, `storage`, with optional per-site access. No `host_permissions`, `content_scripts` or `web_accessible_resources`. |
 | `npm run test:e2e:harness` | 11 browser tests pass, 1 skipped (the popup test, which needs the real extension). These run the real built overlay script in headless Chromium on the fixture pages, with stand-in extension APIs. Covered: the guest journey through reload, reply, resolve and reopen; separate pages on one website; History grouping; repeated text, moved and removed targets, reattach; Escape; failed save and retry; nothing typed into the page being stored; single-page app navigation; dragging and keyboard use of the Blob button; host-page style conflicts; delete confirmation; removal when site access is lost. |
+| `npm run test:e2e` on CI | First run (pull request 1): the real built extension in Chromium, 11 of 12 passed, including the popup test. The one failure was a pin-order assumption: Chrome's storage returns saved items in alphabetical key order, not saving order. Pins are now ordered by number, and the harness mimics Chrome's ordering so this class of mistake fails locally too. The rerun after that fix should be checked on the pull request. |
 | Visual comparison with Figma | Screenshots in `docs/screenshots/` were compared by eye with the welcome, empty, composer, conversation and History frames. |
 
 ## Not verified
 
-- **`npm run test:e2e` (the real extension in Chromium) has never run.** On the development machine, Playwright's full Chromium build fails to start with a Windows "side-by-side configuration" error, before any test code runs. The headless shell used by the harness works. CI is set up to run it, but CI has not run yet either.
 - Loading the unpacked extension in Chrome and using it by hand.
 - The toolbar popup against a real tab, including injection through `activeTab`.
 - Chrome's permission prompt: granting, refusing, and revoking from Chrome's settings.
@@ -56,8 +56,10 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 
 ## Known problems and limitations
 
+- `npm run test:e2e` cannot run on the original development machine: Playwright's full Chromium build fails to start there with a Windows "side-by-side configuration" error. It runs on CI. Use `npm run test:e2e:harness` locally on machines like that.
+- One browser test failed once locally in harness mode and passed in the next 55 runs; which test and why is unknown. CI retries a failed test once and reports it as flaky if the retry passes.
+
 - See "Not verified" above. Treat anything involving Chrome's own extension plumbing as untested.
-- On Windows machines with the same Chromium launch error, use `npm run test:e2e:harness`.
 - A pin on an element inside a scrolling panel is still drawn if the element is scrolled out of the panel's visible area.
 - An anchor can become unavailable after a small text change on the element. This is deliberate caution, and Reattach recovers it.
 - All data is stored under one key, which will not suit thousands of conversations.
@@ -76,6 +78,6 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 Review and verify Milestone 1 in a real browser. Do not start accounts, sharing or rooms.
 
 1. Do the manual walkthrough above in Chrome and record what happened here.
-2. Get `npm run test:e2e` running (in CI, or on a machine where Chromium starts) and fix what it finds.
+2. Confirm `npm run test:e2e` is green on CI after the pin-order fix, and look into any test CI reports as flaky.
 3. Review the code against [MILESTONE-1.md](MILESTONE-1.md): guest journey, persistence, page identity, anchoring, permissions, draft recovery, host-page interference, and consistency with the Figma references.
 4. Fix concrete defects with focused regression tests, then update this file.

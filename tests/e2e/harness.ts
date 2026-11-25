@@ -17,7 +17,21 @@ const STORE_KEY = 'blob-harness-storage';
 const changeListeners = new Set<Listener>();
 const messageListeners = new Set<Listener>();
 
-const readAll = (): Record<string, unknown> => JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}');
+/**
+ * Chrome's storage hands objects back with their keys in alphabetical order,
+ * not the order they were saved in. Do the same, so code that quietly relies
+ * on saving order fails here too.
+ */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (typeof value !== 'object' || value === null) return value;
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) sorted[key] = sortKeys((value as Record<string, unknown>)[key]);
+  return sorted;
+}
+
+const readAll = (): Record<string, unknown> =>
+  sortKeys(JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}')) as Record<string, unknown>;
 
 const harness = {
   failWrites: false,

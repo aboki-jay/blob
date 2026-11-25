@@ -10,6 +10,10 @@ const PORT = 4173;
 
 createServer(async (request, response) => {
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+  if (path === '/favicon.ico') {
+    response.writeHead(204);
+    return response.end();
+  }
   // Every /spa route serves the same document, like a real single-page app.
   const file = path === '/' ? 'index.html' : path.startsWith('/spa') ? 'spa.html' : path.slice(1);
   try {
