@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output (WXT)
+.output/
+.wxt/
+dist/
+*.zip
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Browser profiles and personal test data
+.chrome-profile/
+.browser-profile/
+web-ext-artifacts/
+web-ext.config.ts
+
+# Local agent and editor settings
+.claude/settings.local.json
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS and logs
+.DS_Store
+Thumbs.db
+*.log
