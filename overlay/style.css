@@ -541,6 +541,14 @@ li {
   min-width: 236px;
 }
 
+.site__tile img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
 .site__tile {
   flex: none;
   width: 38px;
@@ -1040,6 +1048,43 @@ textarea::placeholder {
 .nav-current { background: var(--bg-base); } .nav-mascot svg { width: 28px; height: 28px; }
 .nav-avatar { border-left: 1px solid var(--border); padding-left: 8px; }
 .guest-nav button[aria-expanded=true] svg { transform: rotate(180deg); }
+
+/* Collapsed bar: a pill naming whatever is pointed at or focused, 5px under the
+   bar (Figma "Frame 47"). The bar sits high enough to leave the pill room. */
+.guest-nav {
+  bottom: 45px;
+  overflow: visible;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-tip {
+  position: absolute;
+  top: calc(100% + 13px); /* the bar's 8px padding, then 5px */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: var(--bg-fill3);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: -0.13px;
+  white-space: nowrap;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.nav-item:hover > .nav-tip,
+.nav-item:focus-visible > .nav-tip {
+  visibility: visible;
+  opacity: 1;
+}
 .drawer[data-theme=Dark] { color-scheme: dark; }
 @media (prefers-color-scheme: dark) { .drawer[data-theme=System] { color-scheme: dark; } }
 .drawer { color: var(--text); }

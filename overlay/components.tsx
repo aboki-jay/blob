@@ -307,20 +307,50 @@ export function Bar({ children, actions }: { children: ReactNode; actions: React
   );
 }
 
-/** Guest navigation while choosing a comment location. */
+/**
+ * Guest navigation while choosing a comment location (Figma "Bottom navigation").
+ * Collapsed, it shows icons only, and a pill naming whatever is pointed at or
+ * focused appears just under the bar. Expanded, the names are written out.
+ */
 export function GuestNav({ onExit, onResolved }: { onExit: () => void; onResolved: () => void }) {
   const [expanded, setExpanded] = useState(false);
-  return <nav className="bar guest-nav" aria-label="Comment tools">
-    <Icon svg={icons.mascot} className="nav-mascot" />
-    <span className="nav-current" title="Comment"><Icon svg={icons.commentMode} />{expanded && 'Comment'}</span>
-    <button disabled aria-label="Inbox unavailable for guests" title="Inbox unavailable for guests"><Icon svg={icons.message} /></button>
-    <button aria-label="Resolved conversations" title="Resolved" onClick={onResolved}><Icon svg={icons.resolved} />{expanded && 'Resolved'}</button>
-    <span className="nav-avatar" title="Guest"><Avatar small /></span>
-    <button aria-label="Cancel" title="Exit comment mode" onClick={onExit}>Exit</button>
-    <button aria-expanded={expanded} aria-label={expanded ? 'Collapse tools' : 'Expand tools'} onClick={() => setExpanded(!expanded)}>
-      <Icon svg={icons.chevron} />
-    </button>
-  </nav>;
+  // The pill repeats what the item's label already says, so it is hidden from screen readers.
+  const tip = (label: string) =>
+    !expanded && (
+      <span className="nav-tip" aria-hidden="true">
+        {label}
+      </span>
+    );
+  return (
+    <nav className={`bar guest-nav ${expanded ? 'guest-nav--expanded' : ''}`} aria-label="Comment tools">
+      <Icon svg={icons.mascot} className="nav-mascot" />
+      <span className="nav-current nav-item" aria-label="Comment" aria-current="true">
+        <Icon svg={icons.commentMode} />
+        {expanded && 'Comment'}
+        {tip('Comment')}
+      </span>
+      <button className="nav-item" disabled aria-label="Inbox unavailable for guests">
+        <Icon svg={icons.message} />
+        {tip('Inbox unavailable for guests')}
+      </button>
+      <button className="nav-item" aria-label="Resolved conversations" onClick={onResolved}>
+        <Icon svg={icons.resolved} />
+        {expanded && 'Resolved'}
+        {tip('Resolved')}
+      </button>
+      <span className="nav-avatar nav-item" aria-label="Guest">
+        <Avatar small />
+        {tip('Guest')}
+      </span>
+      <button aria-label="Cancel" onClick={onExit}>
+        Exit
+      </button>
+      <button className="nav-item" aria-expanded={expanded} aria-label={expanded ? 'Collapse tools' : 'Expand tools'} onClick={() => setExpanded(!expanded)}>
+        <Icon svg={icons.chevron} />
+        {tip('Expand')}
+      </button>
+    </nav>
+  );
 }
 
 /** A ring around an element on the page. */

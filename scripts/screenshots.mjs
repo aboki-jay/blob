@@ -45,6 +45,9 @@ await shot('03-empty');
 await button('Add a Blob').click();
 await page.mouse.move(...overHero);
 await shot('04-choose-target');
+// The collapsed navigation names an item in a pill when it is pointed at.
+await page.getByRole('navigation', { name: 'Comment tools' }).getByRole('button', { name: 'Resolved conversations' }).hover();
+await shot('17-navigation-label');
 await page.mouse.click(...overHero);
 await page.getByRole('textbox', { name: 'Comment' }).fill('Could we give this button a little more breathing room?');
 await shot('05-new-comment');

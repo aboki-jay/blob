@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { pinPosition, resolveAnchor, type PinPosition, type Resolution } from '@/lib/anchor';
-import { getPageInfo, type PageInfo } from '@/lib/page';
+import { getPageInfo, safeIconUrl, type PageInfo } from '@/lib/page';
 import type { Thread } from '@/lib/types';
 
 /**
@@ -152,4 +152,16 @@ export function useEscape(active: boolean, handler: (inBlob: boolean) => boolean
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [active, host]);
+}
+
+/**
+ * The icon the page itself declares (the one in its browser tab), or the
+ * website's default `/favicon.ico`. Read from the page each time; never saved.
+ */
+export function pageIcon(doc: Document = document): string | undefined {
+  const links = Array.from(doc.querySelectorAll<HTMLLinkElement>('link[rel~="icon" i][href]'));
+  // Prefer one declared at a size close to the 24px it is shown at.
+  const sized = links.find((link) => /(^|\s)(32x32|48x48|any)(\s|$)/i.test(link.getAttribute('sizes') ?? ''));
+  const chosen = sized ?? links[0];
+  return safeIconUrl(chosen ? chosen.href : `${doc.location.origin}/favicon.ico`);
 }

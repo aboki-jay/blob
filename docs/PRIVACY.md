@@ -12,7 +12,9 @@ This describes what Blob actually does as of Milestone 1.
 
 ## Where
 
-In the extension's own `chrome.storage.local`, on this device. Not in the website's storage. Not on a server: Blob has no backend and makes no network requests.
+In the extension's own `chrome.storage.local`, on this device. Not in the website's storage. Not on a server: Blob has no backend, and nothing you write is sent anywhere.
+
+The one thing Blob loads from the web is a website's own icon, to show beside its name. In the toolbar popup it uses the icon address Chrome supplies for the tab you are on; on the page it uses the icon the page declares. Showing it can make one request to that website (or wherever it hosts its icon) for the image, with no referrer. The icon and its address are not saved.
 
 This is not an account backup. Everything is deleted if you remove Blob or clear its data. Deleting a conversation in Blob removes it, its replies and its draft.
 

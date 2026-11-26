@@ -59,7 +59,7 @@ No accounts, API keys or servers are needed.
 
 ## Privacy in one paragraph
 
-Your comments stay in this browser, inside the extension's own storage. Nothing is sent anywhere. Blob does not read passwords, form fields or anything you type into a page, and it keeps no browsing history beyond the pages you commented on. Details: [docs/PRIVACY.md](docs/PRIVACY.md).
+Your comments stay in this browser, inside the extension's own storage. Nothing you write is sent anywhere; the only thing Blob fetches is the icon of the website you are on. Blob does not read passwords, form fields or anything you type into a page, and it keeps no browsing history beyond the pages you commented on. Details: [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Limitations
 
@@ -78,6 +78,10 @@ docs/          architecture, privacy, roadmap, status
 ```
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Contact
+
+Questions and feedback: [blob@davidokunlola.com](mailto:blob@davidokunlola.com).
 
 ## Contributing
 

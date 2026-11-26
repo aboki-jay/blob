@@ -136,6 +136,25 @@ export function siteEnabled(patterns: string[], origin: string): boolean {
   });
 }
 
+/**
+ * A website's icon address, if it is one Blob is willing to show: an ordinary
+ * web address or an embedded image. Anything else (scripts, files, browser
+ * pages) is refused. The address is only ever displayed, never saved.
+ */
+export function safeIconUrl(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  if (/^data:image\/(png|jpeg|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon)[;,]/i.test(value)) return value;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
+    url.username = '';
+    url.password = '';
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
+
 export function cleanTitle(title: string | undefined | null): string {
   const text = (title ?? '').replace(/\s+/g, ' ').trim();
   return text.length > LIMITS.title ? `${text.slice(0, LIMITS.title - 1)}…` : text;

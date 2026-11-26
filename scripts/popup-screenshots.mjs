@@ -12,7 +12,7 @@ await buildHarness();
 if (!(await fetch(HEALTH).then((r) => r.ok).catch(() => false))) await import('../tests/e2e/server.mjs');
 
 const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 800, height: 600 }, deviceScaleFactor: 2 });
+const context = await browser.newContext({ viewport: { width: 450, height: 500 }, deviceScaleFactor: 2 });
 await context.addInitScript({ path: out('.output/harness/harness.js') });
 const page = await context.newPage();
 
@@ -43,6 +43,10 @@ await page.evaluate(() => {
   localStorage.setItem('blob-harness-storage', JSON.stringify({ 'blob:data': { version: 1, threads, pages } }));
 });
 
+// The tab the popup believes it was opened on, with an icon to show.
+await page.addInitScript((icon) => {
+  globalThis.__blobHarness.tab.favIconUrl = icon;
+}, `${ORIGIN}/site-icon.png`);
 await page.goto(`${ORIGIN}/popup.html`);
 await page.evaluate(() => document.fonts.ready);
 await page.waitForTimeout(300);

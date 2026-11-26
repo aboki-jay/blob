@@ -6,7 +6,7 @@ import type { BlobData, Drafts, Thread } from '@/lib/types';
 import { send, useDraft } from './client';
 import type { SavePhase } from './components';
 import { byRecent, dayLabel, groupBySite, lastEvent, pageName, plural, shortTime, stamp } from './format';
-import type { Located } from './hooks';
+import { pageIcon, type Located } from './hooks';
 import { Avatar, Button, Icon, Notice, SiteCard, StorageNote, icons } from './ui';
 
 /* ---------- Welcome ---------- */
@@ -158,7 +158,7 @@ export function Activity({
   return (
     <div className="pane activity-pane">
       <div className="stack gap8">
-        <SiteCard inline title={title} detail={`${page.origin}${page.label === '/' ? '' : page.label}`} />
+        <SiteCard inline icon={pageIcon()} title={title} detail={`${page.origin}${page.label === '/' ? '' : page.label}`} />
       </div>
       {onSite.length === 0 ? (
         <EmptyState

@@ -6,10 +6,10 @@ import logIn from '@/assets/icons/log-in.svg?raw';
 import warningArt from '@/assets/icons/warning.svg?raw';
 import { useEffect, useState } from 'react';
 import type { Request, Response } from '@/lib/messages';
-import { cleanTitle, getPageInfo, hostLabel, originPattern, type PageInfo } from '@/lib/page';
+import { cleanTitle, getPageInfo, hostLabel, originPattern, safeIconUrl, type PageInfo } from '@/lib/page';
 import { groupBySite, type SiteGroup } from '@/overlay/format';
 import { KEYS, migrate } from '@/lib/storage/store';
-import { Icon, icons } from '@/overlay/ui';
+import { Icon, SiteTile, icons } from '@/overlay/ui';
 
 /**
  * The toolbar popup, from the Figma section "Chrome popup" (guest frame).
@@ -24,12 +24,12 @@ type Status =
   | { kind: 'loading' }
   /** A page Chrome does not let extensions touch, or not a web page at all. */
   | { kind: 'unsupported' }
-  | { kind: 'ready'; tabId: number; page: PageInfo; title: string; lasting: boolean; showing: boolean };
+  | { kind: 'ready'; tabId: number; page: PageInfo; title: string; icon?: string; lasting: boolean; showing: boolean };
 
 type Note = { tone: 'info' | 'error'; text: string } | null;
 
-/** How many recent websites the popup lists. */
-const RECENT_LIMIT = 6;
+/** How many recent websites the popup lists: two rows of two. */
+const RECENT_LIMIT = 4;
 
 const ask = async (request: Request): Promise<Response> =>
   ((await browser.runtime.sendMessage(request).catch((error: unknown) => ({ ok: false, error: 'storage-failed', message: String(error) }))) as Response) ?? {
@@ -51,7 +51,8 @@ async function readStatus(): Promise<Status> {
     browser.permissions.contains({ origins: [originPattern(page.origin)] }).catch(() => false),
     isShowing(tab.id),
   ]);
-  return { kind: 'ready', tabId: tab.id, page, title: cleanTitle(tab.title), lasting, showing };
+  // Chrome hands over the tab's icon address along with its title when the toolbar button is clicked.
+  return { kind: 'ready', tabId: tab.id, page, title: cleanTitle(tab.title), icon: safeIconUrl(tab.favIconUrl), lasting, showing };
 }
 
 /** The little list-and-mascot picture above the message. */
@@ -153,9 +154,7 @@ export function Popup() {
         <div className="card__top">
           {ready ? (
             <div className="site">
-              <span className="site__tile" aria-hidden="true">
-                {host[0]?.toUpperCase()}
-              </span>
+              <SiteTile icon={ready.icon} letter={host[0]?.toUpperCase() ?? 'B'} />
               <span className="site__text">
                 <span className="site__title">{ready.title || host}</span>
                 <span className="site__url">{ready.page.origin}</span>
@@ -174,7 +173,10 @@ export function Popup() {
         </div>
 
         <div className="hero">
-          <Art warning={!ready} />
+          {/* A message needs the room, so the picture steps aside while one is showing.
+              It is removed rather than hidden: the mascot's colours are defined once per
+              page, and a hidden copy would take them away from the one in the footer. */}
+          {!note && <Art warning={!ready} />}
           <div className="hero__text">
             {ready ? (
               <>

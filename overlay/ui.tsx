@@ -5,7 +5,7 @@ import sendArrow from '@/assets/icons/send.svg?raw';
 import filter from '@/assets/icons/filter.svg?raw';
 import file from '@/assets/icons/file.svg?raw';
 import settings from '@/assets/icons/settings.svg?raw';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import historyActive from '@/assets/icons/history-active.svg?raw';
 import history from '@/assets/icons/history.svg?raw';
 import mascot from '@/assets/icons/mascot.svg?raw';
@@ -50,14 +50,30 @@ export function Notice({ title, children, error }: { title: string; children?: R
   );
 }
 
-/** The website tile: a letter instead of a favicon, so Blob needs no extra access. */
-export function SiteCard({ title, detail, inline }: { title: string; detail: string; inline?: boolean }) {
+/**
+ * The square at the start of a website card: the website's own icon when there
+ * is one and it loads, otherwise the first letter of its name.
+ */
+export function SiteTile({ icon, letter }: { icon?: string; letter: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [icon]);
+  return (
+    <span className="site__tile" aria-hidden="true">
+      {icon && !failed ? (
+        // No referrer: the website learns nothing about Blob from the request.
+        <img src={icon} alt="" width={24} height={24} referrerPolicy="no-referrer" draggable={false} onError={() => setFailed(true)} />
+      ) : (
+        letter
+      )}
+    </span>
+  );
+}
+
+export function SiteCard({ title, detail, inline, icon }: { title: string; detail: string; inline?: boolean; icon?: string }) {
   const letter = (detail.replace(/^https?:\/\//, '').replace(/^www\./, '')[0] ?? 'b').toUpperCase();
   return (
     <div className={`site ${inline ? 'site--inline' : ''}`}>
-      <span className="site__tile" aria-hidden="true">
-        {letter}
-      </span>
+      <SiteTile icon={icon} letter={letter} />
       <span className="stack grow">
         <span className="t13 medium clip">{title}</span>
         <span className="t12 faint clip">{detail}</span>

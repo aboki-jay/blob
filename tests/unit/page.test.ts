@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPageInfo, isSupportedUrl, originPattern, siteEnabled } from '@/lib/page';
+import { getPageInfo, isSupportedUrl, originPattern, safeIconUrl, siteEnabled } from '@/lib/page';
 
 const key = (href: string) => getPageInfo(href)?.key;
 
@@ -73,5 +73,20 @@ describe('site access patterns', () => {
     expect(siteEnabled(granted, 'https://other.com')).toBe(false);
     expect(siteEnabled(granted, 'https://en.wiki.org')).toBe(true);
     expect(siteEnabled([], 'https://example.com')).toBe(false);
+  });
+});
+
+describe('website icons', () => {
+  it('accepts ordinary web addresses and embedded images', () => {
+    expect(safeIconUrl('https://example.com/favicon.ico')).toBe('https://example.com/favicon.ico');
+    expect(safeIconUrl('http://localhost:3000/icon.svg')).toBe('http://localhost:3000/icon.svg');
+    expect(safeIconUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA');
+  });
+
+  it('refuses anything else, and never keeps credentials', () => {
+    for (const value of ['javascript:alert(1)', 'chrome://favicon/https://example.com', 'file:///C:/icon.png', 'data:text/html,<script>1</script>', 'not a url', '', undefined, null]) {
+      expect(safeIconUrl(value)).toBeUndefined();
+    }
+    expect(safeIconUrl('https://user:hunter2@example.com/favicon.ico')).toBe('https://example.com/favicon.ico');
   });
 });

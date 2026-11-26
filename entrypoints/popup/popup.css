@@ -1,6 +1,12 @@
 /*
  * The toolbar popup. Values are from the Figma section "Chrome popup":
- * 800 x 600 (the largest popup Chrome allows), a white card on a grey frame.
+ * a white card on a grey frame, 450 x 500.
+ *
+ * Layout follows the 450 x 500 frame (node 341:1937): margins, card padding and
+ * corners, the gaps between blocks, the centred message, the picture's size and
+ * where Recent websites sits. That frame is the 800 x 600 one scaled to 62.5%,
+ * which would make text 8-10px, so text, buttons, the website card and the tick
+ * box keep their sizes from the 800 x 600 frame (the maintainer's choice).
  */
 
 :root {
@@ -32,8 +38,8 @@ body {
 }
 
 body {
-  width: 800px;
-  height: 600px;
+  width: 450px;
+  height: 500px;
   background: var(--bg-fill2);
   color: var(--text);
   font-family: 'Blob Inter', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -77,27 +83,32 @@ button {
 .popup {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 800px;
-  height: 600px;
-  padding: 12px 14px;
+  gap: 8px;
+  width: 450px;
+  height: 500px;
+  padding: 8px 10px;
 }
 
 .card {
   position: relative;
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 14px 10px;
+  /* Three rows: the website on top, recent websites at the bottom, and the
+     message between them. The outer rows share the spare height equally, which
+     centres the message in the card. If one of them needs more than its share
+     the message moves over instead of being covered. */
+  display: grid;
+  grid-template-rows: minmax(min-content, 1fr) auto minmax(min-content, 1fr);
+  row-gap: 12px; /* the least air between the three rows */
+  padding: 8px;
   overflow: hidden;
   background: var(--bg-base);
   border: 1px solid var(--border-soft);
-  border-radius: 20px;
+  border-radius: 12.5px;
 }
 
 .card__top {
+  align-self: start;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -127,6 +138,14 @@ button {
   color: var(--primary);
   font-size: 18px;
   font-weight: 600;
+}
+
+.site__tile img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: contain;
 }
 
 .site__text {
@@ -205,22 +224,19 @@ button {
 /* ---------- Centre ---------- */
 
 .hero {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  padding: 0 20px;
+  gap: 15px;
 }
+
 
 .hero__text {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 320px;
+  gap: 4px;
+  width: min(320px, 100%);
   text-align: center;
 }
 
@@ -238,7 +254,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .btn {
@@ -322,8 +338,7 @@ button {
 }
 
 .note {
-  width: 320px;
-  margin-top: -8px;
+  width: min(320px, 100%);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 16px;
@@ -340,6 +355,8 @@ button {
   position: relative;
   width: 128px;
   height: 80px;
+  /* Drawn as in the 800 x 600 frame, shown at the 450 x 500 frame's size (80 x 50). */
+  zoom: 0.625;
 }
 
 .art__panel {
@@ -429,12 +446,12 @@ button {
 /* ---------- Recent websites ---------- */
 
 .recent {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
+  grid-row: 3;
+  align-self: end;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  margin-bottom: 10px; /* 18px above the card's edge, as in the frame */
 }
 
 .recent h2 {
@@ -461,7 +478,7 @@ button {
 .recent ul {
   display: grid;
   grid-template-columns: repeat(2, max-content);
-  gap: 4px 0;
+  gap: 2px 0;
   margin-left: -6px;
 }
 
@@ -521,7 +538,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  height: 30px;
   font-size: 13px;
   line-height: 20px;
   font-weight: 500;

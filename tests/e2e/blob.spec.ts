@@ -458,6 +458,58 @@ test('the Blob tab: docked to an edge, slides out, click opens, drag moves, posi
   await expect(tab).toBeFocused();
 });
 
+test('the website card shows the site’s own icon, or its initial when there is none', async ({ page, driver }) => {
+  // This page declares an icon.
+  await driver.open(page, '/pricing.html');
+  await continueAsGuest(page);
+  await expect(drawer(page).locator('.site__tile img')).toHaveAttribute('src', `${ORIGIN}/site-icon.png`);
+  await expect.poll(() => imageLoaded(page, 'blob-overlay .drawer .site__tile img')).toBe(true);
+  // This one does not, and the website has no default icon either.
+  await driver.open(page);
+  await blob(page).click();
+  await expect(drawer(page).locator('.site__tile')).toHaveText('1');
+  await expect(drawer(page).locator('.site__tile img')).toHaveCount(0);
+});
+
+test('collapsed navigation: pointing at an item shows its name in a pill under the bar', async ({ page, driver }) => {
+  await driver.open(page);
+  await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Add a Blob' }).click();
+  const nav = page.getByRole('navigation', { name: 'Comment tools' });
+  const resolved = nav.getByRole('button', { name: 'Resolved conversations' });
+  const pill = resolved.locator('.nav-tip');
+  await expect(pill).toBeHidden();
+
+  await resolved.hover();
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveText('Resolved');
+  // As in Figma: 32px tall, 5px under the bar, centred on the item, and fully on screen.
+  const [bar, item, tip] = [(await nav.boundingBox())!, (await resolved.boundingBox())!, (await pill.boundingBox())!];
+  expect(Math.round(tip.height)).toBe(32);
+  expect(Math.round(tip.y - (bar.y + bar.height))).toBe(5);
+  expect(Math.abs(tip.x + tip.width / 2 - (item.x + item.width / 2))).toBeLessThan(1.5);
+  await expect(pill).toBeInViewport({ ratio: 1 });
+
+  // An item that cannot be used yet says so.
+  const inbox = nav.getByRole('button', { name: 'Inbox unavailable for guests' });
+  await inbox.hover();
+  await expect(inbox.locator('.nav-tip')).toBeVisible();
+  await expect(pill).toBeHidden();
+
+  // Expanded, the names are written out, so there are no pills.
+  await nav.getByRole('button', { name: 'Expand tools' }).click();
+  await resolved.hover();
+  await expect(nav.locator('.nav-tip')).toHaveCount(0);
+
+  // Collapsed again, reaching an item with the keyboard shows its pill too.
+  await nav.getByRole('button', { name: 'Collapse tools' }).click();
+  await page.mouse.move(5, 5);
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(resolved).toBeFocused();
+  await expect(pill).toBeVisible();
+});
+
 test('the Blob tab keeps clear of scrollbars', async ({ page, driver }) => {
   const slotRight = async () => {
     const box = (await page.locator('blob-overlay .edge-slot').boundingBox())!;
@@ -543,7 +595,36 @@ test('the popup explains pages Blob cannot run on', async ({ page, context }) =>
 const popupSetup = (page: Page, settings: Record<string, unknown>) =>
   page.addInitScript((given) => Object.assign((globalThis as any).__blobHarness, given), settings);
 const popupRequests = (page: Page) => page.evaluate(() => (globalThis as any).__blobHarness.requests as { type: string }[]);
-const wise = { id: 7, url: 'https://www.wise.com/pricing?token=SECRET', title: 'Wise: The International account' };
+/** Nothing in the popup's card is cut off, and its three parts do not overlap. */
+async function expectPopupFits(page: Page) {
+  const boxes = await page.evaluate(() => {
+    const rect = (selector: string) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    };
+    const card = document.querySelector('.card')!;
+    const hero = document.querySelector('.hero')!;
+    const content = [...hero.children].map((child) => child.getBoundingClientRect()).filter((r) => r.height > 0);
+    return {
+      card: rect('.card')!,
+      top: rect('.card__top')!,
+      recent: rect('.recent'),
+      heroContent: { top: Math.min(...content.map((r) => r.top)), bottom: Math.max(...content.map((r) => r.bottom)) },
+      clipped: card.scrollHeight > card.clientHeight + 1,
+    };
+  });
+  expect(boxes.clipped).toBe(false);
+  expect(boxes.heroContent.top).toBeGreaterThanOrEqual(boxes.top.bottom);
+  // At least 12px of air above the recent list.
+  expect(boxes.heroContent.bottom).toBeLessThanOrEqual(boxes.recent ? boxes.recent.top - 11.5 : boxes.card.bottom);
+}
+
+const wise = { id: 7, url: 'https://www.wise.com/pricing?token=SECRET', title: 'Wise: The International account', favIconUrl: `${ORIGIN}/site-icon.png` };
+/** True once an image has actually loaded and has something to show. */
+const imageLoaded = (page: Page, selector: string) =>
+  page.locator(selector).evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0);
 
 test('popup: guest layout, recent websites, and using Blob on the page', async ({ page, driver }) => {
   test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
@@ -553,17 +634,35 @@ test('popup: guest layout, recent websites, and using Blob on the page', async (
   await comment(page, '#hero', 'Saved before opening the popup');
 
   await popupSetup(page, { tab: wise });
-  await page.setViewportSize({ width: 800, height: 600 });
+  await page.setViewportSize({ width: 450, height: 500 });
   await page.goto('/popup.html');
   await expect(page.getByRole('heading', { name: 'No Blobs on this website yet' })).toBeVisible();
   await expect(page.locator('.site')).toContainText('Wise: The International account');
   await expect(page.locator('.site')).toContainText('https://www.wise.com');
+  // The website's own icon, from the address Chrome supplies for the tab.
+  await expect.poll(() => imageLoaded(page, '.site__tile img')).toBe(true);
   await expect(page.locator('body')).not.toContainText('SECRET');
   await expect(page.locator('.chip')).toContainText('Guest');
   // Signing in is in the design but not built: shown, and switched off.
   await expect(page.getByRole('button', { name: 'Login' })).toBeDisabled();
-  // Everything fits Chrome's largest popup without scrolling.
-  expect(await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight])).toEqual([800, 600]);
+  // The popup is 450 x 500 and everything fits without scrolling or overlapping.
+  expect(await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight])).toEqual([450, 500]);
+  await expectPopupFits(page);
+  // Margins from the 450 x 500 Figma frame: 10px at the sides, 8px above and below, 8px between card and footer.
+  const frame = await page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const [card, footer] = [box('.card'), box('.footer')];
+    return { left: card.left, top: card.top, right: 450 - card.right, cardHeight: card.height, gap: footer.top - card.bottom, footerHeight: footer.height, below: 500 - footer.bottom };
+  });
+  expect(frame).toEqual({ left: 10, top: 8, right: 10, cardHeight: 446, gap: 8, footerHeight: 30, below: 8 });
+  // The message is centred in the card, and Recent websites sits 18px above the card's edge.
+  const placed = await page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const [card, hero, recent] = [box('.card'), box('.hero'), box('.recent')];
+    return { offCentre: Math.abs((hero.top + hero.bottom) / 2 - (card.top + card.bottom) / 2), recentGap: card.bottom - recent.bottom };
+  });
+  expect(placed.offCentre).toBeLessThan(1);
+  expect(Math.round(placed.recentGap)).toBe(19); // 18px inside the card's 1px border
 
   // Recent websites: pointing at one shows "Open"; it links to the page that was commented on.
   const recent = page.getByRole('navigation', { name: 'Recent websites' });
@@ -584,11 +683,15 @@ test('popup: "Always show" follows Chrome’s answer, and can be turned off agai
   const label = page.getByText('Always show on wise.com');
 
   // Chrome's prompt is refused: the box stays empty and the popup says so.
-  await popupSetup(page, { tab: wise, acceptPrompt: false });
+  // (This tab's icon cannot be loaded, so the website's initial is shown instead.)
+  await popupSetup(page, { tab: { ...wise, favIconUrl: `${ORIGIN}/no-such-icon.png` }, acceptPrompt: false });
   await page.goto('/popup.html');
+  await expect(page.locator('.site__tile')).toHaveText('W');
+  await expect(page.locator('.site__tile img')).toHaveCount(0);
   await label.click();
   await expect(page.getByRole('status')).toContainText('Access wasn’t granted');
   await expect(always).not.toBeChecked();
+  await expectPopupFits(page);
   expect(await popupRequests(page)).toEqual([]);
 
   // Accepted: ticked, Blob is put on the page, and the button now opens it.
@@ -597,6 +700,10 @@ test('popup: "Always show" follows Chrome’s answer, and can be turned off agai
   await label.click();
   await expect(always).toBeChecked();
   await expect(page.getByRole('status')).toContainText('Blob will appear whenever you visit wise.com');
+  // The footer mascot keeps its colour while the message is showing.
+  expect(await page.locator('.footer__brand svg path').first().evaluate((el) => getComputedStyle(el).fill)).toContain('url(');
+  await expect(page.locator('.art')).toHaveCount(0);
+  await expectPopupFits(page);
   await expect(page.getByRole('button', { name: 'Open Blob' })).toBeVisible();
   expect(await popupRequests(page)).toContainEqual({ type: 'tab/activate', tabId: 7 });
 
@@ -627,6 +734,12 @@ test('approved guest screens fit a narrow viewport and feedback stays local', as
   await drawer(page).getByRole('button', { name: 'Good' }).click();
   await expect(drawer(page).getByRole('button', { name: 'Good' })).toHaveAttribute('aria-pressed', 'true');
   await expect(drawer(page).getByRole('button', { name: 'Submit' })).toBeDisabled();
+  // Blob sends nothing itself; it offers an email, started with what was chosen and written.
+  await drawer(page).getByPlaceholder('Share your feedback').fill('Pins are easy to place');
+  await expect(drawer(page).getByRole('link', { name: 'blob@davidokunlola.com' })).toHaveAttribute(
+    'href',
+    'mailto:blob@davidokunlola.com?subject=Blob%20feedback&body=How%20I%20like%20Blob%3A%20Good%0A%0APins%20are%20easy%20to%20place',
+  );
   await drawer(page).getByLabel('Close feedback').click();
   await drawer(page).getByRole('button', { name: 'Continue as a Guest' }).click();
   await page.getByRole('button', { name: 'Add a Blob' }).click();

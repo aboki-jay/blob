@@ -36,7 +36,7 @@ const readAll = (): Record<string, unknown> =>
 const harness = {
   failWrites: false,
   /** For the popup: the tab it believes it was opened on. */
-  tab: { id: 1, url: 'https://www.wise.com/pricing', title: 'Wise: The International account' } as { id: number; url: string; title: string },
+  tab: { id: 1, url: 'https://www.wise.com/pricing', title: 'Wise: The International account' } as { id: number; url: string; title: string; favIconUrl?: string },
   /** For the popup: websites with lasting access, and whether Chrome's prompt will be accepted. */
   granted: [] as string[],
   acceptPrompt: true,
