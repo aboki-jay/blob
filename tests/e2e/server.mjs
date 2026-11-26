@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { ORIGIN, PORT } from './origin.mjs';
 
 const root = fileURLToPath(new URL('../fixtures/', import.meta.url));
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+// The built extension, so the popup page can be opened like any other page in harness mode.
+const built = fileURLToPath(new URL('../../.output/chrome-mv3/', import.meta.url));
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png' };
 
 createServer(async (request, response) => {
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
@@ -21,7 +23,7 @@ createServer(async (request, response) => {
   // Every /spa route serves the same document, like a real single-page app.
   const file = path === '/' ? 'index.html' : path.startsWith('/spa') ? 'spa.html' : path.slice(1);
   try {
-    const body = await readFile(join(root, file));
+    const body = await readFile(join(root, file)).catch(() => readFile(join(built, file)));
     response.writeHead(200, { 'content-type': types[extname(file)] ?? 'text/plain', 'cache-control': 'no-store' });
     response.end(body);
   } catch {

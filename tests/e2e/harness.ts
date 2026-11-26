@@ -35,6 +35,13 @@ const readAll = (): Record<string, unknown> =>
 
 const harness = {
   failWrites: false,
+  /** For the popup: the tab it believes it was opened on. */
+  tab: { id: 1, url: 'https://www.wise.com/pricing', title: 'Wise: The International account' } as { id: number; url: string; title: string },
+  /** For the popup: websites with lasting access, and whether Chrome's prompt will be accepted. */
+  granted: [] as string[],
+  acceptPrompt: true,
+  /** For the popup: what it asked the background to do. */
+  requests: [] as unknown[],
   /** Sends a command to the overlay, as the popup or background would. */
   command(message: unknown) {
     messageListeners.forEach((listener) => listener(message, { id: 'blob-harness' }, () => undefined));
@@ -70,16 +77,39 @@ const fake = {
   runtime: {
     id: 'blob-harness',
     getURL: (path: string) => `chrome-extension://blob-harness/${path}`,
-    sendMessage: (message: unknown) =>
-      handleRequest(
+    sendMessage: (message: unknown) => {
+      harness.requests.push(message);
+      return handleRequest(
         // Messages cross a process boundary in the real extension; copy them here too.
         JSON.parse(JSON.stringify(message)),
-        { pageOrigin: location.origin, fromExtensionPage: false },
-        { store, activateTab: async () => undefined, disableSite: async () => undefined },
-      ),
+        // Extension pages (the popup) are not web pages with an http origin.
+        { pageOrigin: location.origin, fromExtensionPage: location.pathname === '/popup.html' },
+        {
+          store,
+          activateTab: async () => undefined,
+          disableSite: async (pattern) => {
+            harness.granted = harness.granted.filter((p) => p !== pattern);
+          },
+        },
+      );
+    },
     onMessage: event(messageListeners),
   },
   storage: { local, onChanged: event(changeListeners) },
+  // Enough of chrome.tabs and chrome.permissions for the popup to run.
+  tabs: {
+    query: async () => [harness.tab],
+    sendMessage: async () => {
+      throw new Error('Could not establish connection. Receiving end does not exist.');
+    },
+  },
+  permissions: {
+    contains: async ({ origins = [] }: { origins?: string[] }) => origins.every((o) => harness.granted.includes(o)),
+    request: async ({ origins = [] }: { origins?: string[] }) => {
+      if (harness.acceptPrompt) harness.granted.push(...origins);
+      return harness.acceptPrompt;
+    },
+  },
 };
 
 Object.assign(globalThis, { chrome: fake, __blobHarness: harness });

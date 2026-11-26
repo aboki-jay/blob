@@ -12,7 +12,7 @@ Account examples use local guest data. Feedback supports rating and text entry; 
 
 ## What works
 
-- Toolbar popup: use Blob on the current tab, always show on a website, turn a website off, hide on this tab, and an explanation on pages Chrome blocks.
+- Toolbar popup, rebuilt from the Figma "Chrome popup" guest frame (800 x 600): the current website, a Guest chip, "Use Blob on this page", an "Always show on ..." tick box that asks Chrome for access to that one website and gives it up again when unticked, and "Recent websites" with a count each. Pointing at a recent website widens it and shows "Open". Pages Chrome blocks get an explanation and nothing to press. "Login" is shown switched off, because signing in is not built.
 - Blob tab (48 × 96) docked to the left or right edge: tucked at rest, slides out when the pointer comes near or it has focus, tells a click from a drag, and remembers its edge and height. It keeps clear of scrollbars: it sits inside a scrollbar that belongs to the page's own scrolling area or floats over the content, and its tucked part is cut off rather than drawn over the scrollbar.
 - Comment tag on the page, from the Figma "Comment tags" section: clicking a pin opens a card beside the element with "Pinned to …", the comments (name, time, text), replies grouped under the comment they answer with an "N replies" bar that expands and collapses, and an "Add a comment" bar. The same card is used to write the first comment, and it stays open after posting. Resolve is in the card's header. Reactions from the design are not built.
 - Injected drawer with Welcome ("Continue as a Guest"), Activity for the current website, History (Websites and Resolved) and a conversation view.
@@ -63,6 +63,10 @@ Account examples use local guest data. Feedback supports rating and text entry; 
 Also worth trying: refuse the permission prompt in step 6 (the popup should say access wasn't granted), and a second page on the same website (its comments should be listed separately).
 
 ## Known problems and limitations
+
+- The popup was checked by opening the built popup page with stand-ins for `chrome.tabs` and `chrome.permissions`, and comparing screenshots with Figma. It has not been opened from the toolbar in real Chrome since the redesign.
+- The Figma prototype could not be played (the link needs a Figma sign-in). Interactions were taken from the component variants instead: the recent-website item has "Initial" and "Hover" variants. Anything in the prototype beyond that is not reflected.
+- Popup differences from the frame: a letter tile stands in for the website's favicon (showing the real one needs another permission or a network request); the ticked state of the tick box uses a standard check mark, because only the unticked state was in the frame; when the website already has comments the heading reads "N Blobs on this website", a state the frame does not show; "Hide Blob on this tab" was dropped because the frame has no place for it.
 
 - The comment tag's header says "New comment" when writing the first comment and "Comment" for an existing conversation; the Figma frames say "New comment" in both. The header's Resolve control is not in the Figma frames.
 - Scrollbar clearance is tested only where scrollbars float over the content (the test browser hides them). The classic-scrollbar case inside a page's own scrolling area is handled in code but not covered by a test, and has not been checked in real Chrome.

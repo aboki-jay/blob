@@ -1,18 +1,35 @@
+import avatarBody from '@/assets/icons/avatar-body.svg?raw';
+import avatarHead from '@/assets/icons/avatar-head.svg?raw';
+import check from '@/assets/icons/check.svg?raw';
+import externalLink from '@/assets/icons/external-link.svg?raw';
+import logIn from '@/assets/icons/log-in.svg?raw';
 import warningArt from '@/assets/icons/warning.svg?raw';
 import { useEffect, useState } from 'react';
 import type { Request, Response } from '@/lib/messages';
-import { getPageInfo, hostLabel, originPattern, type PageInfo } from '@/lib/page';
-import { groupBySite, plural, type SiteGroup } from '@/overlay/format';
+import { cleanTitle, getPageInfo, hostLabel, originPattern, type PageInfo } from '@/lib/page';
+import { groupBySite, type SiteGroup } from '@/overlay/format';
 import { KEYS, migrate } from '@/lib/storage/store';
 import { Icon, icons } from '@/overlay/ui';
+
+/**
+ * The toolbar popup, from the Figma section "Chrome popup" (guest frame).
+ *
+ * It does three things: puts Blob on the page you are looking at, lets you
+ * choose "Always show" for that one website, and lists the websites you have
+ * commented on. Signing in is in the design but not built, so "Login" is shown
+ * switched off.
+ */
 
 type Status =
   | { kind: 'loading' }
   /** A page Chrome does not let extensions touch, or not a web page at all. */
   | { kind: 'unsupported' }
-  | { kind: 'ready'; tabId: number; page: PageInfo; lasting: boolean; showing: boolean };
+  | { kind: 'ready'; tabId: number; page: PageInfo; title: string; lasting: boolean; showing: boolean };
 
-type Note = { tone: 'info' | 'error'; title: string; body: string } | null;
+type Note = { tone: 'info' | 'error'; text: string } | null;
+
+/** How many recent websites the popup lists. */
+const RECENT_LIMIT = 6;
 
 const ask = async (request: Request): Promise<Response> =>
   ((await browser.runtime.sendMessage(request).catch((error: unknown) => ({ ok: false, error: 'storage-failed', message: String(error) }))) as Response) ?? {
@@ -34,7 +51,28 @@ async function readStatus(): Promise<Status> {
     browser.permissions.contains({ origins: [originPattern(page.origin)] }).catch(() => false),
     isShowing(tab.id),
   ]);
-  return { kind: 'ready', tabId: tab.id, page, lasting, showing };
+  return { kind: 'ready', tabId: tab.id, page, title: cleanTitle(tab.title), lasting, showing };
+}
+
+/** The little list-and-mascot picture above the message. */
+function Art({ warning }: { warning?: boolean }) {
+  return (
+    <div className={`art ${warning ? 'art--warning' : ''}`} aria-hidden="true">
+      <div className="art__panel">
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="art__row">
+            <i />
+            <span>
+              <b />
+              <b />
+            </span>
+          </div>
+        ))}
+        <div className="art__fade" />
+      </div>
+      <Icon svg={warning ? warningArt : icons.mascot} className="art__badge" />
+    </div>
+  );
 }
 
 export function Popup() {
@@ -56,152 +94,155 @@ export function Popup() {
 
   if (status.kind === 'loading') return <main className="popup" aria-busy="true" />;
 
-  const host = status.kind === 'ready' ? hostLabel(status.page.origin) : '';
+  const ready = status.kind === 'ready' ? status : null;
+  const host = ready ? hostLabel(ready.page.origin) : '';
+  const here = ready ? (sites.find((site) => site.origin === ready.page.origin)?.count ?? 0) : 0;
 
   const openBlob = async () => {
-    if (status.kind !== 'ready') return;
+    if (!ready) return;
     setBusy(true);
     setNote(null);
-    const ok = status.showing
-      ? await browser.tabs.sendMessage(status.tabId, { type: 'overlay/open' }).then(() => true, () => false)
-      : (await ask({ type: 'tab/activate', tabId: status.tabId })).ok;
+    const ok = ready.showing
+      ? await browser.tabs.sendMessage(ready.tabId, { type: 'overlay/open' }).then(() => true, () => false)
+      : (await ask({ type: 'tab/activate', tabId: ready.tabId })).ok;
     setBusy(false);
     if (ok) window.close();
-    else
-      setNote({
-        tone: 'error',
-        title: 'Blob couldn’t start on this page',
-        body: 'Chrome blocks extensions on some pages, such as PDFs, browser pages and a few protected sites. Nothing was changed.',
-      });
+    else setNote({ tone: 'error', text: 'Blob couldn’t start on this page. Chrome blocks extensions on some pages, such as PDFs and a few protected sites.' });
   };
 
   const allowAlways = async () => {
-    if (status.kind !== 'ready') return;
+    if (!ready) return;
     setNote(null);
     // Must be the first thing that happens after the click, or Chrome refuses to ask.
     let granted = false;
     try {
-      granted = await browser.permissions.request({ origins: [originPattern(status.page.origin)] });
+      granted = await browser.permissions.request({ origins: [originPattern(ready.page.origin)] });
     } catch {
       granted = false;
     }
     if (!granted) {
-      setNote({
-        tone: 'info',
-        title: 'Access wasn’t granted',
-        body: `Blob will stay off ${host} unless you click this toolbar button. You can still use it on this tab now.`,
-      });
+      setNote({ tone: 'info', text: `Access wasn’t granted, so Blob won’t appear on ${host} by itself. You can still use it on this page.` });
       return;
     }
-    await ask({ type: 'tab/activate', tabId: status.tabId });
-    setStatus({ ...status, lasting: true, showing: true });
-    setNote({ tone: 'info', title: `Blob is on for ${host}`, body: 'It will appear whenever you visit this website.' });
+    await ask({ type: 'tab/activate', tabId: ready.tabId });
+    setStatus({ ...ready, lasting: true, showing: true });
+    setNote({ tone: 'info', text: `Blob will appear whenever you visit ${host}.` });
   };
 
   const turnOff = async () => {
-    if (status.kind !== 'ready') return;
+    if (!ready) return;
     setBusy(true);
-    const pattern = originPattern(status.page.origin);
+    const pattern = originPattern(ready.page.origin);
     await ask({ type: 'site/disable', origin: pattern });
     const stillAllowed = await browser.permissions.contains({ origins: [pattern] }).catch(() => false);
-    await browser.tabs.sendMessage(status.tabId, { type: 'overlay/unmount' }).catch(() => undefined);
+    await browser.tabs.sendMessage(ready.tabId, { type: 'overlay/unmount' }).catch(() => undefined);
     setBusy(false);
-    setStatus({ ...status, lasting: stillAllowed, showing: false });
+    setStatus({ ...ready, lasting: stillAllowed, showing: false });
     setNote(
       stillAllowed
-        ? {
-            tone: 'error',
-            title: 'Chrome still allows Blob here',
-            body: 'This website’s access was granted in Chrome’s settings. Open Chrome’s extension settings for Blob to change it.',
-          }
-        : { tone: 'info', title: `Blob is off for ${host}`, body: 'Your saved comments are kept on this device.' },
+        ? { tone: 'error', text: 'Chrome still allows Blob here: this access was granted in Chrome’s own settings. Change it in Chrome’s extension settings for Blob.' }
+        : { tone: 'info', text: `Blob is off for ${host}. Your comments are kept on this device.` },
     );
   };
 
-  const hide = async () => {
-    if (status.kind !== 'ready') return;
-    await browser.tabs.sendMessage(status.tabId, { type: 'overlay/unmount' }).catch(() => undefined);
-    setStatus({ ...status, showing: false });
-  };
-
-  const total = sites.reduce((sum, site) => sum + site.count, 0);
+  const recent = sites.slice(0, RECENT_LIMIT);
 
   return (
     <main className="popup">
-      <header className="popup__header">
-        <Icon svg={icons.mascot} />
-        <h1>Blob</h1>
-      </header>
-
-      {status.kind === 'unsupported' ? (
-        <section className="restricted-state" role="status">
-          <div className="restricted-art" aria-hidden="true"><i /><Icon svg={warningArt} /><b /></div>
-          <p className="strong">Blob can’t run on this page</p>
-          <p>
-            Chrome doesn’t let extensions add comments to browser pages, the Chrome Web Store, PDFs or local files. Open an
-            ordinary website and click this button again.
-          </p>
-        </section>
-      ) : (
-        <>
-          <section className="site">
-            <span className="site__tile" aria-hidden="true">
-              {host[0]?.toUpperCase()}
-            </span>
-            <span className="site__text">
-              <span className="strong clip">{host}</span>
-              <span className="muted clip">
-                {status.lasting ? 'Blob appears here automatically' : status.showing ? 'On this tab only' : 'Blob is not on this page'}
+      <section className="card">
+        <div className="card__top">
+          {ready ? (
+            <div className="site">
+              <span className="site__tile" aria-hidden="true">
+                {host[0]?.toUpperCase()}
               </span>
-            </span>
-          </section>
-
-          <button type="button" className="btn btn--primary" onClick={() => void openBlob()} disabled={busy}>
-            {status.showing ? 'Open Blob' : 'Use Blob on this page'}
-          </button>
-
-          {status.lasting ? (
-            <button type="button" className="btn btn--outline" onClick={() => void turnOff()} disabled={busy}>
-              Turn off for {host}
-            </button>
+              <span className="site__text">
+                <span className="site__title">{ready.title || host}</span>
+                <span className="site__url">{ready.page.origin}</span>
+              </span>
+            </div>
           ) : (
-            <>
-              <button type="button" className="btn btn--soft" onClick={() => void allowAlways()} disabled={busy}>
-                Always show on {host}
-              </button>
-              <p className="muted small">
-                Without this, Blob stays only until you leave or reload the page. Chrome will ask you to confirm access to this
-                one website.
-              </p>
-              {status.showing && (
-                <button type="button" className="btn btn--text" onClick={() => void hide()}>
-                  Hide Blob on this tab
-                </button>
-              )}
-            </>
+            <span />
           )}
-        </>
-      )}
+          <span className="chip" title="Guest. Only you can see your comments. They are stored on this device and are not backed up.">
+            <span className="chip__avatar" aria-hidden="true">
+              <Icon svg={avatarHead} className="chip__head" />
+              <Icon svg={avatarBody} className="chip__body" />
+            </span>
+            Guest
+          </span>
+        </div>
 
-      {note && (
-        <section className={`notice ${note.tone === 'error' ? 'notice--error' : ''}`} role={note.tone === 'error' ? 'alert' : 'status'}>
-          <p className="strong">{note.title}</p>
-          <p>{note.body}</p>
-        </section>
-      )}
+        <div className="hero">
+          <Art warning={!ready} />
+          <div className="hero__text">
+            {ready ? (
+              <>
+                <h1>{here === 0 ? 'No Blobs on this website yet' : `${here} Blob${here === 1 ? '' : 's'} on this website`}</h1>
+                <p>{here === 0 ? 'Choose a part of this page and leave your first comment' : 'Open Blob to read them or add another comment'}</p>
+              </>
+            ) : (
+              <>
+                <h1>Blob can’t run on this page</h1>
+                <p>Chrome doesn’t let extensions add comments to browser pages, the Chrome Web Store, PDFs or local files. Open an ordinary website and try again.</p>
+              </>
+            )}
+          </div>
+          {ready && (
+            <div className="hero__actions">
+              <button type="button" className="btn btn--primary" onClick={() => void openBlob()} disabled={busy}>
+                {ready.showing ? 'Open Blob' : 'Use Blob on this page'}
+              </button>
+              <label className="check">
+                <input type="checkbox" checked={ready.lasting} disabled={busy} onChange={() => void (ready.lasting ? turnOff() : allowAlways())} />
+                <span className="check__box" aria-hidden="true">
+                  <Icon svg={check} />
+                </span>
+                <span className="check__label">Always show on {host}</span>
+              </label>
+            </div>
+          )}
+          {note && (
+            <p className={`note ${note.tone === 'error' ? 'note--error' : ''}`} role={note.tone === 'error' ? 'alert' : 'status'}>
+              {note.text}
+            </p>
+          )}
+        </div>
 
-      <section className="saved" aria-label="Your saved comments">
-        <p className="strong">
-          {total === 0 ? 'No comments yet' : `${plural(total, 'conversation')} on ${plural(sites.length, 'website')}`}
-        </p>
-        <p className="muted small">Only you · Stored on this device. Not backed up; removing Blob deletes them.</p>
-        {sites.slice(0, 5).map((site) => (
-          <a key={site.origin} className="saved__row" href={site.pages[0]?.page.url ?? site.origin} target="_blank" rel="noopener noreferrer">
-            <span className="clip">{site.host}</span>
-            <span className="muted">{site.count}</span>
-          </a>
-        ))}
+        {recent.length > 0 && (
+          <nav className="recent" aria-label="Recent websites">
+            <h2>
+              Recent websites <span>({sites.length})</span>
+            </h2>
+            <ul>
+              {recent.map((site) => (
+                <li key={site.origin}>
+                  <a href={site.pages[0]?.page.url ?? site.origin} target="_blank" rel="noopener noreferrer" title={`Open ${site.host}`}>
+                    <span className="recent__name">
+                      {site.host} <span className="recent__count">({site.count})</span>
+                    </span>
+                    <span className="recent__open">
+                      <Icon svg={externalLink} />
+                      Open
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
       </section>
+
+      <footer className="footer">
+        <span className="footer__brand">
+          <Icon svg={icons.mascot} />
+          Blob
+        </span>
+        <button type="button" className="footer__login" disabled title="Signing in isn’t available yet">
+          <Icon svg={logIn} />
+          Login
+        </button>
+      </footer>
     </main>
   );
 }

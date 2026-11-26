@@ -531,9 +531,89 @@ test('the popup explains pages Blob cannot run on', async ({ page, context }) =>
   test.skip(HARNESS, 'Needs the real extension.');
   const id = new URL(context.serviceWorkers()[0]!.url()).host;
   await page.goto(`chrome-extension://${id}/popup.html`);
-  await expect(page.getByText('Blob can’t run on this page')).toBeVisible();
-  await expect(page.getByText('No comments yet')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Blob can’t run on this page' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Login' })).toBeDisabled();
   await expect(page.locator('blob-overlay')).toHaveCount(0);
+});
+
+/* ---------- The toolbar popup, with stand-ins for chrome.tabs and chrome.permissions ---------- */
+
+/** Tells the stand-in what tab the popup was opened on and how Chrome's prompt will answer. */
+const popupSetup = (page: Page, settings: Record<string, unknown>) =>
+  page.addInitScript((given) => Object.assign((globalThis as any).__blobHarness, given), settings);
+const popupRequests = (page: Page) => page.evaluate(() => (globalThis as any).__blobHarness.requests as { type: string }[]);
+const wise = { id: 7, url: 'https://www.wise.com/pricing?token=SECRET', title: 'Wise: The International account' };
+
+test('popup: guest layout, recent websites, and using Blob on the page', async ({ page, driver }) => {
+  test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
+  // One saved comment, so there is a website to list.
+  await driver.open(page);
+  await continueAsGuest(page);
+  await comment(page, '#hero', 'Saved before opening the popup');
+
+  await popupSetup(page, { tab: wise });
+  await page.setViewportSize({ width: 800, height: 600 });
+  await page.goto('/popup.html');
+  await expect(page.getByRole('heading', { name: 'No Blobs on this website yet' })).toBeVisible();
+  await expect(page.locator('.site')).toContainText('Wise: The International account');
+  await expect(page.locator('.site')).toContainText('https://www.wise.com');
+  await expect(page.locator('body')).not.toContainText('SECRET');
+  await expect(page.locator('.chip')).toContainText('Guest');
+  // Signing in is in the design but not built: shown, and switched off.
+  await expect(page.getByRole('button', { name: 'Login' })).toBeDisabled();
+  // Everything fits Chrome's largest popup without scrolling.
+  expect(await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight])).toEqual([800, 600]);
+
+  // Recent websites: pointing at one shows "Open"; it links to the page that was commented on.
+  const recent = page.getByRole('navigation', { name: 'Recent websites' });
+  await expect(recent).toContainText(`${HOST} (1)`);
+  const link = recent.getByRole('link');
+  await expect(link.locator('.recent__open')).toBeHidden();
+  await link.hover();
+  await expect(link.locator('.recent__open')).toBeVisible();
+  await expect(link).toHaveAttribute('href', `${ORIGIN}/`);
+
+  await page.getByRole('button', { name: 'Use Blob on this page' }).click();
+  await expect.poll(() => popupRequests(page)).toContainEqual({ type: 'tab/activate', tabId: 7 });
+});
+
+test('popup: "Always show" follows Chrome’s answer, and can be turned off again', async ({ page }) => {
+  test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
+  const always = page.getByRole('checkbox', { name: 'Always show on wise.com' });
+  const label = page.getByText('Always show on wise.com');
+
+  // Chrome's prompt is refused: the box stays empty and the popup says so.
+  await popupSetup(page, { tab: wise, acceptPrompt: false });
+  await page.goto('/popup.html');
+  await label.click();
+  await expect(page.getByRole('status')).toContainText('Access wasn’t granted');
+  await expect(always).not.toBeChecked();
+  expect(await popupRequests(page)).toEqual([]);
+
+  // Accepted: ticked, Blob is put on the page, and the button now opens it.
+  await popupSetup(page, { acceptPrompt: true });
+  await page.reload();
+  await label.click();
+  await expect(always).toBeChecked();
+  await expect(page.getByRole('status')).toContainText('Blob will appear whenever you visit wise.com');
+  await expect(page.getByRole('button', { name: 'Open Blob' })).toBeVisible();
+  expect(await popupRequests(page)).toContainEqual({ type: 'tab/activate', tabId: 7 });
+
+  // Unticking gives the access up and keeps the comments.
+  await label.click();
+  await expect(always).not.toBeChecked();
+  await expect(page.getByRole('status')).toContainText('Blob is off for wise.com. Your comments are kept on this device.');
+  expect(await popupRequests(page)).toContainEqual({ type: 'site/disable', origin: 'https://www.wise.com/*' });
+});
+
+test('popup: explains a page Chrome blocks, with nothing to press', async ({ page }) => {
+  test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
+  await popupSetup(page, { tab: { id: 3, url: 'chrome://extensions/', title: 'Extensions' } });
+  await page.goto('/popup.html');
+  await expect(page.getByRole('heading', { name: 'Blob can’t run on this page' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
 });
 test('approved guest screens fit a narrow viewport and feedback stays local', async ({ page, driver }) => {
   await page.setViewportSize({ width: 360, height: 640 });

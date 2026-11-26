@@ -18,7 +18,7 @@
     "test:e2e:harness": "wxt build && playwright test -c playwright.harness.config.ts",
     "icons": "node scripts/make-icons.mjs",
     "check:manifest": "node scripts/check-manifest.mjs",
-    "screenshots": "wxt build && node scripts/screenshots.mjs"
+    "screenshots": "wxt build && node scripts/screenshots.mjs && node scripts/popup-screenshots.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
