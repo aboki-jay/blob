@@ -110,13 +110,43 @@ const test = base.extend<{ driver: Driver }>({
     await expect.poll(() => sw.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length)).toBe(1);
     await use(extensionDriver(sw));
   },
-  page: async ({ context, driver }, use) => {
+  page: async ({ context, driver }, use, testInfo) => {
     void driver; // make sure the extension is ready before any page opens
     const page = await context.newPage();
     // Surface anything Blob or the fixture page throws.
     page.on('pageerror', (error) => console.log(`[page error] ${error.message}`));
     page.on('console', (message) => message.type() === 'error' && console.log(`[console] ${message.text()}`));
     await use(page);
+    // When a test fails, say what Blob was showing. A failure that only happens
+    // on CI cannot be looked at any other way.
+    if (testInfo.status !== testInfo.expectedStatus) {
+      const state = await page
+        .evaluate(() => {
+          const root = document.querySelector('blob-overlay')?.shadowRoot;
+          const box = (el: Element | null | undefined) => {
+            const r = el?.getBoundingClientRect();
+            return r ? [r.x, r.y, r.width, r.height].map(Math.round).join(',') : null;
+          };
+          const harness = (globalThis as any).__blobHarness;
+          const stored = JSON.parse(localStorage.getItem('blob-harness-storage') ?? '{}');
+          const messages = Object.values((stored['blob:data']?.threads ?? {}) as Record<string, { messages: { reactions?: string[] }[] }>);
+          return {
+            url: location.href,
+            viewport: [innerWidth, innerHeight],
+            scroll: [scrollX, scrollY],
+            focus: root?.activeElement ? `${root.activeElement.localName}.${root.activeElement.className}` : document.activeElement?.localName,
+            alerts: [...(root?.querySelectorAll('[role=alert]') ?? [])].map((el) => el.textContent),
+            card: box(root?.querySelector('.comment-tag')),
+            pin: box(root?.querySelector('.pin')),
+            pills: [...(root?.querySelectorAll('.tag-reaction') ?? [])].map((el) => `${el.textContent} @${box(el)}`),
+            choices: box(root?.querySelector('.tag-react__choices')),
+            requests: harness?.requests?.map((r: Record<string, unknown>) => [r.type, r.emoji, r.on].filter((v) => v !== undefined).join(' ')),
+            storedReactions: messages.map((thread) => thread.messages.map((m) => m.reactions ?? [])),
+          };
+        })
+        .catch((error: unknown) => `could not be read: ${String(error)}`);
+      console.log(`[blob at failure] ${JSON.stringify(state)}`);
+    }
   },
 });
 
