@@ -466,8 +466,11 @@ test('reactions: add one from the smiley, see it stay, take it back', async ({ p
   await pins(page).click();
   await expect(chip).toHaveCount(2);
 
-  // Pressing a chip takes that reaction back.
+  // Pressing a chip takes that reaction back. Wait for the count first: for an
+  // instant after the press both pills are still on screen, and a check of one
+  // pill's text fails outright when it finds two instead of waiting.
   await chip.first().click();
+  await expect(chip).toHaveCount(1);
   await expect(chip).toHaveText('❤️1');
   expect(await stored()).toEqual(['❤️']);
   await chip.click();
