@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import laugh from '@/assets/icons/laugh.svg?raw';
 import { newId } from '@/lib/messages';
-import type { AnchorDescriptor, Drafts, Message, Thread } from '@/lib/types';
+import { REACTIONS, type AnchorDescriptor, type Drafts, type Message, type Reaction, type Thread } from '@/lib/types';
 import { send, useDraft } from './client';
 import { Icon, icons } from './ui';
 
@@ -11,8 +12,9 @@ import { Icon, icons } from './ui';
  * bar. The same card is used to write the first comment and to read and
  * continue a conversation.
  *
- * Reactions from the design are not built: with one local guest there is
- * nobody to react, and Blob does not show controls that do nothing.
+ * Pointing at a comment shows a smiley for adding a reaction, beside Reply
+ * (Figma "Comment with emoji hover"). Reactions are the guest's own and are
+ * saved on the device like everything else, so each one counts once.
  */
 
 export type SavePhase = 'idle' | 'saving' | 'failed';
@@ -237,9 +239,74 @@ export function NewCommentTag({
 
 /* ---------- Reading and continuing a conversation ---------- */
 
-function Comment({ message, onReply, replying }: { message: Message; onReply?: () => void; replying?: boolean }) {
+/** What each reaction is called, for people who cannot see it. */
+const REACTION_NAMES: Record<Reaction, string> = {
+  '👍': 'Thumbs up',
+  '❤️': 'Heart',
+  '😂': 'Laughing',
+  '😮': 'Surprised',
+  '😢': 'Sad',
+  '🙏': 'Thanks',
+};
+
+function Comment({
+  threadId,
+  message,
+  onReply,
+  replying,
+}: {
+  threadId: string;
+  message: Message;
+  onReply?: () => void;
+  replying?: boolean;
+}) {
+  const [choosing, setChoosing] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // Only the reactions Blob offers are ever shown, whatever storage holds.
+  const given = REACTIONS.filter((emoji) => message.reactions?.includes(emoji));
+
+  // The choices float just above the smiley that opened them, like the reaction
+  // bar in a chat app. They are placed against the window, not the card, so the
+  // card's scrolling list cannot cut them off.
+  const smiley = useRef<HTMLButtonElement>(null);
+  const choices = useRef<HTMLSpanElement>(null);
+  const [place, setPlace] = useState<{ left: number; top: number; below: boolean } | null>(null);
+  useLayoutEffect(() => {
+    if (!choosing) return setPlace(null);
+    const from = smiley.current?.getBoundingClientRect();
+    const size = choices.current?.getBoundingClientRect();
+    if (!from || !size) return;
+    const vp = viewport();
+    // Above the smiley, or below it when there is no room above.
+    const below = from.top - size.height - 8 < 8;
+    setPlace({
+      left: clamp(from.left - 8, 8, vp.w - size.width - 8),
+      top: below ? from.bottom + 8 : from.top - size.height - 8,
+      below,
+    });
+  }, [choosing]);
+  // They would be left behind if anything moved, so moving puts them away.
+  useEffect(() => {
+    if (!choosing) return;
+    const close = () => setChoosing(false);
+    window.addEventListener('scroll', close, { capture: true, passive: true });
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, { capture: true });
+      window.removeEventListener('resize', close);
+    };
+  }, [choosing]);
+
+  const react = async (emoji: Reaction, on: boolean) => {
+    setChoosing(false);
+    setFailed(false);
+    const result = await send({ type: 'thread/react', threadId, messageId: message.id, emoji, on });
+    if (!result.ok) setFailed(true);
+  };
+
+  const classes = ['tag-comment', replying && 'tag-comment--replying', (given.length > 0 || choosing) && 'tag-comment--reacted'];
   return (
-    <div className={`tag-comment ${replying ? 'tag-comment--replying' : ''}`}>
+    <div className={classes.filter(Boolean).join(' ')}>
       <div className="tag-comment__head">
         <GuestAvatar />
         <span className="tag-comment__who">
@@ -250,18 +317,81 @@ function Comment({ message, onReply, replying }: { message: Message; onReply?: (
         </span>
       </div>
       <p className="tag-comment__body">{message.body}</p>
-      {onReply && (
-        <div className="tag-comment__actions">
-          <button type="button" className="tag-reply-btn" onClick={onReply} aria-pressed={replying}>
-            Reply
+      <div className="tag-comment__actions">
+        <span
+          className="tag-react"
+          // Clicking or tabbing away puts the choices back.
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setChoosing(false);
+          }}
+        >
+          <button
+            ref={smiley}
+            type="button"
+            className="tag-react__add"
+            aria-label="Add a reaction"
+            aria-expanded={choosing}
+            onClick={() => setChoosing(!choosing)}
+          >
+            <Icon svg={laugh} />
           </button>
-        </div>
+          {choosing && (
+            <span
+              ref={choices}
+              className={`tag-react__choices ${place ? (place.below ? 'is-below' : 'is-above') : ''}`}
+              // Measured first, then shown where it belongs.
+              style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: 'hidden' }}
+              role="group"
+              aria-label="Reactions"
+            >
+              {REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  aria-label={REACTION_NAMES[emoji]}
+                  aria-pressed={given.includes(emoji)}
+                  onClick={() => void react(emoji, !given.includes(emoji))}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </span>
+          )}
+          {given.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              className="tag-reaction"
+              aria-pressed="true"
+              aria-label={`${REACTION_NAMES[emoji]}, 1. Remove your reaction`}
+              title="Remove your reaction"
+              onClick={() => void react(emoji, false)}
+            >
+              <span>{emoji}</span>
+              {/* One guest, so each reaction counts once. */}
+              <span>1</span>
+            </button>
+          ))}
+        </span>
+        {onReply && (
+          <span className="tag-comment__reply">
+            <span className="tag-comment__divider" aria-hidden="true" />
+            <button type="button" className="tag-reply-btn" onClick={onReply} aria-pressed={replying}>
+              Reply
+            </button>
+          </span>
+        )}
+      </div>
+      {failed && (
+        <p className="tag__status tag__status--error" role="alert">
+          Couldn’t save that reaction. Nothing was changed.
+        </p>
       )}
     </div>
   );
 }
 
-function Replies({ replies }: { replies: Message[] }) {
+function Replies({ threadId, replies }: { threadId: string; replies: Message[] }) {
   const [open, setOpen] = useState(true);
   const last = replies[replies.length - 1]!;
   return (
@@ -276,7 +406,7 @@ function Replies({ replies }: { replies: Message[] }) {
         </span>
         <Icon svg={icons.chevron} />
       </button>
-      {open && replies.map((reply) => <Comment key={reply.id} message={reply} />)}
+      {open && replies.map((reply) => <Comment key={reply.id} threadId={threadId} message={reply} />)}
     </div>
   );
 }
@@ -378,6 +508,7 @@ export function ThreadTag({
           return (
             <div key={message.id} className="tag__item">
               <Comment
+                threadId={thread.id}
                 message={message}
                 replying={replyTo === message.id}
                 onReply={() => {
@@ -385,7 +516,7 @@ export function ThreadTag({
                   input.current?.focus();
                 }}
               />
-              {replies.length > 0 && <Replies replies={replies} />}
+              {replies.length > 0 && <Replies threadId={thread.id} replies={replies} />}
             </div>
           );
         })}

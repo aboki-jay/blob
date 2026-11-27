@@ -216,4 +216,65 @@ describe('schema versions', () => {
     expect(() => migrate('nonsense')).toThrow(BlobError);
     expect(() => migrate({ threads: {} })).toThrow(BlobError);
   });
+
+  it('upgrades comments saved by version 1 without changing them', async () => {
+    const area = new FakeArea();
+    const thread = await create(new BlobStore(area));
+    // As an older Blob would have left it: version 1, no reactions anywhere.
+    const saved = structuredClone(area.items[KEYS.data]) as { version: number; threads: Record<string, unknown>; pages: unknown };
+    const old = { ...saved, version: 1 };
+    area.items[KEYS.data] = old;
+
+    expect(migrate(old)).toEqual({ ...saved, version: SCHEMA_VERSION });
+    // The next save writes it back at the current version, with the comment intact.
+    await new BlobStore(area).addReply(thread.id, id(), 'Still here');
+    const data = await readData(area);
+    expect(data.version).toBe(SCHEMA_VERSION);
+    expect(data.threads[thread.id]?.messages.map((m) => m.body)).toEqual(['More breathing room?', 'Still here']);
+  });
+});
+
+describe('reactions', () => {
+  it('adds and removes a reaction, keeps a fixed order, and is safe to repeat', async () => {
+    const area = new FakeArea();
+    const store = new BlobStore(area, () => '2026-11-27T10:00:00.000Z');
+    const thread = await create(store);
+    const messageId = thread.messages[0]!.id;
+    const reactions = async () => (await readData(area)).threads[thread.id]?.messages[0]?.reactions;
+
+    await store.setReaction(thread.id, messageId, '😮', true);
+    await store.setReaction(thread.id, messageId, '👍', true);
+    await store.setReaction(thread.id, messageId, '👍', true); // an impatient second click
+    expect(await reactions()).toEqual(['👍', '😮']);
+
+    await store.setReaction(thread.id, messageId, '😮', false);
+    await store.setReaction(thread.id, messageId, '😮', false);
+    expect(await reactions()).toEqual(['👍']);
+
+    // With none left, nothing is stored for it at all.
+    await store.setReaction(thread.id, messageId, '👍', false);
+    expect(await reactions()).toBeUndefined();
+  });
+
+  it('does not count as activity, so the conversation keeps its place', async () => {
+    let now = '2026-11-27T10:00:00.000Z';
+    const store = new BlobStore(new FakeArea(), () => now);
+    const thread = await create(store);
+    now = '2026-11-28T10:00:00.000Z';
+    const after = await store.setReaction(thread.id, thread.messages[0]!.id, '❤️', true);
+    expect(after.updatedAt).toBe('2026-11-27T10:00:00.000Z');
+  });
+
+  it('refuses a comment or conversation that does not exist, and saves nothing on a failed write', async () => {
+    const area = new FakeArea();
+    const store = new BlobStore(area);
+    const thread = await create(store);
+    await expect(store.setReaction(id(), thread.messages[0]!.id, '👍', true)).rejects.toMatchObject({ code: 'not-found' });
+    await expect(store.setReaction(thread.id, id(), '👍', true)).rejects.toMatchObject({ code: 'not-found' });
+
+    area.failWrites = true;
+    await expect(store.setReaction(thread.id, thread.messages[0]!.id, '👍', true)).rejects.toMatchObject({ code: 'storage-failed' });
+    area.failWrites = false;
+    expect((await readData(area)).threads[thread.id]?.messages[0]?.reactions).toBeUndefined();
+  });
 });

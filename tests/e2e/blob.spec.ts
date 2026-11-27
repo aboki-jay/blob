@@ -344,7 +344,141 @@ test('Escape cancels choosing, and the page works normally afterwards', async ({
   await expect(page.getByRole('textbox', { name: 'Comment' })).toHaveValue('Unfinished thought');
 });
 
-test('a failed save keeps the draft, says so, and a retry saves once', async ({ page, driver }) => {
+test('reactions: add one from the smiley, see it stay, take it back', async ({ page, driver }) => {
+  await driver.open(page);
+  await continueAsGuest(page);
+  await comment(page, '#hero', 'Could this be rounder?');
+  await pins(page).click();
+  const first = tag(page).locator('.tag-comment').first();
+  const chip = first.locator('.tag-reaction');
+  const stored = async () => (await threads(driver, page))[0]?.messages[0]?.reactions;
+
+  // Pointing at the comment shows the smiley beside Reply (Figma "Comment with emoji hover").
+  await expect(first.getByRole('button', { name: 'Add a reaction' })).toBeHidden();
+  await first.hover();
+  const add = first.getByRole('button', { name: 'Add a reaction' });
+  await expect(add).toBeVisible();
+  await expect(first.getByRole('button', { name: 'Reply' })).toBeVisible();
+  // The smiley sits to the left of Reply, 35px in from the comment's edge.
+  const row = await first.evaluate((el) => {
+    const box = (selector: string) => el.querySelector(selector)!.getBoundingClientRect();
+    return { inset: box('.tag-react__add').left - el.getBoundingClientRect().left, order: box('.tag-react__add').right <= box('.tag-reply-btn').left };
+  });
+  expect(row).toEqual({ inset: 35, order: true });
+
+  // The smiley offers a fixed set of reactions, in a pill that floats just above it.
+  const rowBefore = await first.locator('.tag-comment__actions').boundingBox();
+  await add.click();
+  const choices = first.getByRole('group', { name: 'Reactions' });
+  await expect(choices.getByRole('button')).toHaveCount(6);
+  await expect(choices).toHaveText('👍❤️😂😮😢🙏');
+  await expect(choices).toHaveCSS('visibility', 'visible');
+  await expect.poll(async () => (await choices.boundingBox())!.height).toBeGreaterThan(40); // opening animation finished
+  const [pill, smiley, card] = [(await choices.boundingBox())!, (await add.boundingBox())!, (await tag(page).boundingBox())!];
+  expect(Math.round(smiley.y - (pill.y + pill.height))).toBe(8);
+  expect(Math.round(smiley.x - pill.x)).toBe(8);
+  // It sits over the card without being cut off, and takes no room in the row.
+  expect(pill.y).toBeGreaterThan(card.y);
+  expect(pill.x + pill.width).toBeLessThan(card.x + card.width);
+  expect(await first.locator('.tag-comment__actions').boundingBox()).toEqual(rowBefore);
+  const topmost = await choices.getByRole('button', { name: 'Thanks' }).evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const root = button.getRootNode() as ShadowRoot;
+    return root.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === button;
+  });
+  expect(topmost).toBe(true);
+  await choices.getByRole('button', { name: 'Thumbs up' }).click();
+  await expect(choices).toHaveCount(0);
+  await expect(chip).toHaveText('👍1');
+  expect(await stored()).toEqual(['👍']);
+  // The chip looks like the one in the design: grey pill, fully rounded.
+  expect(await chip.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).borderRadius])).toEqual(['rgb(233, 234, 236)', '30px']);
+
+  // A second one; they keep a fixed order whatever order they were added in.
+  await add.click();
+  await choices.getByRole('button', { name: 'Heart' }).click();
+  await expect(chip).toHaveCount(2);
+  expect(await stored()).toEqual(['👍', '❤️']);
+
+  // Opening the choices again marks the ones already given; clicking elsewhere puts them away.
+  await add.click();
+  await expect(choices.getByRole('button', { name: 'Heart' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(choices.getByRole('button', { name: 'Sad' })).toHaveAttribute('aria-pressed', 'false');
+  await tag(page).getByRole('textbox', { name: 'Comment' }).click();
+  await expect(choices).toHaveCount(0);
+
+  // Away from the comment the reactions stay in view and Reply steps back.
+  await page.mouse.move(5, 5);
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await expect(tag(page)).toBeVisible();
+  await expect(chip.first()).toBeVisible();
+  await expect(first.getByRole('button', { name: 'Reply' })).toBeHidden();
+
+  // They are saved: still there after a reload.
+  await driver.reload(page);
+  await pins(page).click();
+  await expect(chip).toHaveCount(2);
+
+  // Pressing a chip takes that reaction back.
+  await chip.first().click();
+  await expect(chip).toHaveText('❤️1');
+  expect(await stored()).toEqual(['❤️']);
+  await chip.click();
+  await expect(chip).toHaveCount(0);
+  expect(await stored()).toBeUndefined();
+
+  // A failed save says so and shows nothing that was not saved.
+  await driver.failWrites(page, true);
+  await first.hover();
+  await add.click();
+  await choices.getByRole('button', { name: 'Thanks' }).click();
+  await expect(first.getByRole('alert')).toContainText('Couldn’t save that reaction');
+  await expect(chip).toHaveCount(0);
+  await driver.failWrites(page, false);
+});
+
+test('the page can still be scrolled while choosing where to comment',async ({ page, driver }) => {
+  await driver.open(page);
+  await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Add a Blob' }).click();
+  await expect(page.locator('blob-overlay .catcher')).toBeVisible();
+
+  // An ordinary page: the wheel scrolls the document.
+  await page.evaluate(() => {
+    document.body.style.minHeight = '3000px';
+  });
+  await page.mouse.move(300, 300);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+  await page.mouse.wheel(0, -400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  // A page that scrolls inside its own panel, as many web apps do: the wheel scrolls
+  // the panel under the pointer, and nothing in it is activated.
+  await page.evaluate(() => {
+    document.body.style.minHeight = '';
+    const panel = document.createElement('div');
+    panel.id = 'panel';
+    panel.style.cssText = 'position:fixed;inset:0 50% 0 0;overflow:auto;background:#fff;';
+    panel.innerHTML = '<button id="panel-button" style="margin:20px">In the panel</button><div style="height:3000px"></div><p id="deep">Far down</p>';
+    panel.querySelector('button')!.addEventListener('click', () => ((window as any).panelClicks = ((window as any).panelClicks ?? 0) + 1));
+    document.body.append(panel);
+  });
+  await page.mouse.move(200, 300);
+  await page.mouse.wheel(0, 500);
+  await expect.poll(() => page.evaluate(() => document.getElementById('panel')!.scrollTop)).toBe(500);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  // The highlight follows what is now under the pointer, and choosing still works after scrolling.
+  await page.mouse.wheel(0, 5000);
+  await expect.poll(() => page.evaluate(() => Math.round(document.getElementById('deep')!.getBoundingClientRect().top))).toBeLessThan(832);
+  await page.locator('#deep').scrollIntoViewIfNeeded();
+  const deep = (await page.locator('#deep').boundingBox())!;
+  await page.mouse.click(deep.x + 10, deep.y + deep.height / 2);
+  await expect(page.getByRole('textbox', { name: 'Comment' })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).panelClicks ?? 0)).toBe(0);
+});
+
+test('a failed save keeps the draft, says so, and a retry saves once',async ({ page, driver }) => {
   await driver.open(page);
   await continueAsGuest(page);
   await pick(page, '#hero');
@@ -528,7 +662,36 @@ test('the Blob tab keeps clear of scrollbars', async ({ page, driver }) => {
   expect(await page.locator('blob-overlay .edge-slot').evaluate((el) => getComputedStyle(el).clipPath)).toContain('inset');
 });
 
-test('the page’s styles do not leak into Blob', async ({ page, driver }) => {
+test('closing the drawer: the close corner turns red when pointed at or focused', async ({ page, driver }) => {
+  await driver.open(page);
+  await blob(page).click();
+  const close = drawer(page).getByRole('button', { name: 'Close Blob' });
+  const look = () =>
+    close.evaluate((button) => ({
+      background: getComputedStyle(button).backgroundColor,
+      cross: getComputedStyle(button.querySelector('svg path')!).stroke,
+    }));
+  const red = { background: 'rgb(255, 82, 82)', cross: 'rgb(255, 255, 255)' };
+
+  // At rest it is as quiet as the rest of the header.
+  expect(await look()).toEqual({ background: 'rgba(0, 0, 0, 0)', cross: 'rgb(103, 106, 121)' });
+  // Pointed at: red corner, white cross (Figma "Main/welcome/close").
+  await close.hover();
+  await expect.poll(look).toEqual(red);
+  await page.mouse.move(10, 10);
+  await expect.poll(look).not.toEqual(red);
+  // Reached with the keyboard: the same warning.
+  await close.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await expect.poll(look).toEqual(red);
+
+  await page.keyboard.press('Enter');
+  await expect(drawer(page)).toBeHidden();
+});
+
+test('the page’s styles do not leak into Blob',async ({ page, driver }) => {
   await driver.open(page);
   await blob(page).click();
   const title = page.locator('blob-overlay .welcome__title');
@@ -587,6 +750,10 @@ test('the popup explains pages Blob cannot run on', async ({ page, context }) =>
   test.skip(HARNESS, 'Needs the real extension.');
   const id = new URL(context.serviceWorkers()[0]!.url()).host;
   await page.goto(`chrome-extension://${id}/popup.html`);
+  // A fresh install: the popup welcomes you first, wherever it is opened.
+  await expect(page.getByRole('heading', { name: 'Leave a thought right where it belongs.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Continue as a Guest' }).click();
   await expect(page.getByRole('heading', { name: 'Blob can’t run on this page' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Login' })).toBeDisabled();
@@ -626,9 +793,64 @@ async function expectPopupFits(page: Page) {
 }
 
 const wise = { id: 7, url: 'https://www.wise.com/pricing?token=SECRET', title: 'Wise: The International account', favIconUrl: `${ORIGIN}/site-icon.png` };
+const welcomeHeading = (page: Page) => page.getByRole('heading', { name: 'Leave a thought right where it belongs.' });
+/** Opens the popup for the first time and gets past its welcome screen, leaving a freshly loaded popup. */
+async function openPopupAsGuest(page: Page) {
+  await page.goto('/popup.html');
+  await page.getByRole('button', { name: 'Continue as a Guest' }).click();
+  await expect(welcomeHeading(page)).toHaveCount(0);
+  await page.reload();
+}
 /** True once an image has actually loaded and has something to show. */
 const imageLoaded = (page: Page, selector: string) =>
   page.locator(selector).evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0);
+
+test('popup: the first time, it welcomes you and lets you continue as a guest', async ({ page, driver }) => {
+  test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
+  await popupSetup(page, { tab: wise });
+  await page.setViewportSize({ width: 450, height: 500 });
+  await page.goto('/popup.html');
+
+  // The welcome screen, and nothing that assumes a choice has been made.
+  await expect(welcomeHeading(page)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toHaveCount(0);
+  await expect(page.locator('.chip')).toHaveCount(0);
+  // Signing in is in the design but not built: shown, and switched off.
+  const signIn = page.getByRole('button', { name: 'Sign in' });
+  await expect(signIn).toBeDisabled();
+  await expect(signIn).toHaveAttribute('title', 'Signing in isn’t available yet');
+  expect(await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight])).toEqual([450, 500]);
+  // Sizes from the Figma frame "Main/welcome": 268px buttons, 12px apart, 16px under the text.
+  const layout = await page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const [card, welcome, intro, actions] = [box('.card'), box('.welcome'), box('.welcome__intro'), box('.welcome__actions')];
+    const buttons = [...document.querySelectorAll('.welcome__actions button')].map((button) => button.getBoundingClientRect());
+    return {
+      offCentre: Math.abs((welcome.top + welcome.bottom) / 2 - (card.top + card.bottom) / 2),
+      introToActions: actions.top - intro.bottom,
+      buttonWidths: buttons.map((b) => b.width),
+      buttonHeights: buttons.map((b) => b.height),
+      betweenButtons: buttons[1]!.top - buttons[0]!.bottom,
+    };
+  });
+  expect(layout.offCentre).toBeLessThan(1);
+  expect(layout).toMatchObject({ introToActions: 16, buttonWidths: [268, 268], buttonHeights: [36, 36], betweenButtons: 12 });
+
+  // Continuing as a guest is remembered, and the popup becomes the usual one.
+  await page.getByRole('button', { name: 'Continue as a Guest' }).click();
+  await expect(page.getByRole('heading', { name: 'No Blobs on this website yet' })).toBeVisible();
+  await expect(page.locator('.chip')).toContainText('Guest');
+  expect(await popupRequests(page)).toContainEqual({ type: 'settings/set', settings: { onboarded: true } });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toBeVisible();
+  await expect(welcomeHeading(page)).toHaveCount(0);
+
+  // The drawer on the page does not ask again.
+  await driver.open(page);
+  await blob(page).click();
+  await expect(drawer(page).getByText('No Blobs on this website yet')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue as a Guest' })).toHaveCount(0);
+});
 
 test('popup: guest layout, recent websites, and using Blob on the page', async ({ page, driver }) => {
   test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
@@ -689,7 +911,7 @@ test('popup: "Always show" follows Chrome’s answer, and can be turned off agai
   // Chrome's prompt is refused: the box stays empty and the popup says so.
   // (This tab's icon cannot be loaded, so the website's initial is shown instead.)
   await popupSetup(page, { tab: { ...wise, favIconUrl: `${ORIGIN}/no-such-icon.png` }, acceptPrompt: false });
-  await page.goto('/popup.html');
+  await openPopupAsGuest(page);
   await expect(page.locator('.site__tile')).toHaveText('W');
   await expect(page.locator('.site__tile img')).toHaveCount(0);
   await label.click();
@@ -721,7 +943,10 @@ test('popup: "Always show" follows Chrome’s answer, and can be turned off agai
 test('popup: explains a page Chrome blocks, with nothing to press', async ({ page }) => {
   test.skip(!HARNESS, 'Uses the stand-in for chrome.tabs and chrome.permissions.');
   await popupSetup(page, { tab: { id: 3, url: 'chrome://extensions/', title: 'Extensions' } });
+  // Right after installing, this is the page most people are on: the welcome still shows.
   await page.goto('/popup.html');
+  await expect(welcomeHeading(page)).toBeVisible();
+  await page.getByRole('button', { name: 'Continue as a Guest' }).click();
   await expect(page.getByRole('heading', { name: 'Blob can’t run on this page' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);

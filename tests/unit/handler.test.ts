@@ -177,6 +177,44 @@ describe('feedback', () => {
   });
 });
 
+describe('reactions', () => {
+  it('saves a reaction on a comment and takes it back', async () => {
+    const { deps } = setup();
+    const created = (await handleRequest(createMessage(), page, deps)) as { ok: true; data: { id: string; messages: { id: string }[] } };
+    const target = { threadId: created.data.id, messageId: created.data.messages[0]!.id };
+
+    const added = await handleRequest({ type: 'thread/react', ...target, emoji: '👍', on: true }, page, deps);
+    expect(added).toMatchObject({ ok: true, data: { messages: [{ reactions: ['👍'] }] } });
+    const removed = (await handleRequest({ type: 'thread/react', ...target, emoji: '👍', on: false }, page, deps)) as { ok: true; data: { messages: object[] } };
+    expect(removed.ok).toBe(true);
+    expect(removed.data.messages[0]).not.toHaveProperty('reactions');
+  });
+
+  it('accepts only the reactions Blob offers', async () => {
+    const { area, deps } = setup();
+    const created = (await handleRequest(createMessage(), page, deps)) as { ok: true; data: { id: string; messages: { id: string }[] } };
+    const target = { threadId: created.data.id, messageId: created.data.messages[0]!.id };
+    const writes = area.writes;
+
+    for (const emoji of ['💩', 'thumbs up', '<img src=x onerror=alert(1)>', '👍👍', '', 7, undefined]) {
+      expect(await handleRequest({ type: 'thread/react', ...target, emoji, on: true }, page, deps)).toEqual({ ok: false, error: 'invalid' });
+    }
+    // "on" must be a plain yes or no, and the ids must look like ids.
+    expect(parseRequest({ type: 'thread/react', ...target, emoji: '👍', on: 'yes' })).toBeNull();
+    expect(parseRequest({ type: 'thread/react', ...target, emoji: '👍' })).toBeNull();
+    expect(parseRequest({ type: 'thread/react', threadId: '../x', messageId: target.messageId, emoji: '👍', on: true })).toBeNull();
+    expect(area.writes).toBe(writes);
+  });
+
+  it('reports a comment that is not there', async () => {
+    const { deps } = setup();
+    expect(await handleRequest({ type: 'thread/react', threadId: id(), messageId: id(), emoji: '👍', on: true }, page, deps)).toMatchObject({
+      ok: false,
+      error: 'not-found',
+    });
+  });
+});
+
 describe('the feedback relay and the form agree', () => {
   it('on the list of ratings', async () => {
     const [{ RATINGS: form }, { RATINGS: relay }] = await Promise.all([import('@/lib/feedback'), import('@/worker/feedback/src/index')]);

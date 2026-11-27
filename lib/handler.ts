@@ -53,6 +53,8 @@ export async function handleRequest(raw: unknown, sender: Sender, deps: HandlerD
       }
       case 'thread/status':
         return { ok: true, data: await store.setStatus(request.threadId, request.status) };
+      case 'thread/react':
+        return { ok: true, data: await store.setReaction(request.threadId, request.messageId, request.emoji, request.on) };
       case 'thread/reattach':
         return { ok: true, data: await store.reattach(request.threadId, request.anchor) };
       case 'thread/delete':

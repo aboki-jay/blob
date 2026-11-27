@@ -26,6 +26,7 @@
   --primary-accent: #ece8fc;
   --error-text: #d92626;
   --error-focus: #fdd8d8;
+  --error-hover: #ff5252;
   --white: #ffffff;
   --shadow-e2: 0 4px 8px rgba(25, 24, 27, 0.08);
   --shadow-e3: 0 12px 32px rgba(25, 24, 27, 0.14);
@@ -359,6 +360,28 @@ li {
 .drawer__close .icon svg {
   width: 24px;
   height: 24px;
+}
+
+/* About to close: the corner turns red and the cross white, as in the Figma
+   frame "Main/welcome/close". Keyboard focus gets the same warning. */
+.drawer__close,
+.drawer__close .icon svg path {
+  transition: background-color 120ms ease, stroke 120ms ease;
+}
+
+.drawer__close:hover,
+.drawer__close:focus-visible {
+  background: var(--error-hover);
+}
+
+.drawer__close:hover .icon svg path,
+.drawer__close:focus-visible .icon svg path {
+  stroke: var(--white);
+}
+
+.drawer__close:focus-visible {
+  outline-offset: -2px;
+  outline-color: var(--white);
 }
 
 .drawer__body {

@@ -8,6 +8,7 @@
  */
 
 import {
+  REACTIONS,
   SCHEMA_VERSION,
   defaultSettings,
   emptyData,
@@ -16,6 +17,7 @@ import {
   type BlobSettings,
   type Drafts,
   type EnabledSites,
+  type Reaction,
   type Thread,
   type ThreadStatus,
 } from '../types';
@@ -59,10 +61,14 @@ type Migration = (data: Record<string, unknown>) => Record<string, unknown>;
 
 /**
  * Upgrades from older versions, keyed by the version they upgrade *from*.
- * There are none yet. When the shape changes: bump SCHEMA_VERSION and add
+ * When the shape changes: bump SCHEMA_VERSION and add
  * `[oldVersion]: (data) => upgraded` here so existing guest comments survive.
  */
-const MIGRATIONS: Record<number, Migration> = {};
+const MIGRATIONS: Record<number, Migration> = {
+  // Version 2 lets a comment carry reactions. Comments saved before have none,
+  // so nothing in them needs changing.
+  1: (data) => ({ ...data, version: 2 }),
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -223,6 +229,27 @@ export class BlobStore {
       }
       thread.messages.push(message);
       thread.updatedAt = now;
+      return thread;
+    });
+  }
+
+  /**
+   * Adds or removes one of the guest's reactions on a comment. Saying the same
+   * thing twice changes nothing, so a retry is safe. It does not count as
+   * activity: the conversation keeps its place in lists.
+   */
+  setReaction(threadId: string, messageId: string, emoji: Reaction, on: boolean): Promise<Thread> {
+    return this.mutate((data) => {
+      const thread = data.threads[threadId];
+      const message = thread?.messages.find((m) => m.id === messageId);
+      if (!thread || !message) throw new BlobError('not-found');
+      const chosen = new Set(Array.isArray(message.reactions) ? message.reactions : []);
+      if (on) chosen.add(emoji);
+      else chosen.delete(emoji);
+      // Kept in the fixed order, and only ever the known reactions.
+      const reactions = REACTIONS.filter((reaction) => chosen.has(reaction));
+      if (reactions.length) message.reactions = reactions;
+      else delete message.reactions;
       return thread;
     });
   }

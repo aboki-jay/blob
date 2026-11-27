@@ -6,7 +6,7 @@
  * it. Everything in a request is treated as untrusted input.
  */
 
-import { LIMITS, type AnchorAttr, type AnchorDescriptor, type BlobSettings, type ThreadStatus } from './types';
+import { LIMITS, REACTIONS, type AnchorAttr, type AnchorDescriptor, type BlobSettings, type Reaction, type ThreadStatus } from './types';
 import { FEEDBACK_MAX, RATINGS, type Rating } from './feedback';
 import type { ErrorCode } from './storage/store';
 
@@ -14,6 +14,8 @@ export type Request =
   | { type: 'thread/create'; id: string; messageId: string; href: string; title: string; anchor: AnchorDescriptor; body: string }
   | { type: 'thread/reply'; threadId: string; messageId: string; body: string; replyTo?: string }
   | { type: 'thread/status'; threadId: string; status: ThreadStatus }
+  /** Add (`on`) or take back one of the fixed reactions on a comment. */
+  | { type: 'thread/react'; threadId: string; messageId: string; emoji: Reaction; on: boolean }
   | { type: 'thread/reattach'; threadId: string; anchor: AnchorDescriptor }
   | { type: 'thread/delete'; threadId: string }
   | { type: 'draft/set'; key: string; text: string }
@@ -109,6 +111,12 @@ export function parseRequest(raw: unknown): Request | null {
     case 'thread/status':
       if (!isId(raw.threadId) || (raw.status !== 'open' && raw.status !== 'resolved')) return null;
       return { type: raw.type, threadId: raw.threadId, status: raw.status };
+    case 'thread/react': {
+      // Only the reactions Blob offers: never free text from the page.
+      const emoji = REACTIONS.find((reaction) => reaction === raw.emoji);
+      if (!isId(raw.threadId) || !isId(raw.messageId) || !emoji || typeof raw.on !== 'boolean') return null;
+      return { type: raw.type, threadId: raw.threadId, messageId: raw.messageId, emoji, on: raw.on };
+    }
     case 'thread/reattach': {
       const anchor = parseAnchor(raw.anchor);
       if (!isId(raw.threadId) || !anchor) return null;

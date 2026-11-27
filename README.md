@@ -38,7 +38,7 @@ Then load it into Chrome:
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and choose the `.output/chrome-mv3` folder inside this project.
 4. Pin Blob to the toolbar (puzzle-piece icon, then the pin next to Blob).
-5. Open any ordinary website, click the Blob toolbar button, then **Use Blob on this page**.
+5. Open any ordinary website and click the Blob toolbar button. The first time, choose **Continue as a Guest**. Then click **Use Blob on this page**.
 
 No accounts, API keys or servers are needed.
 

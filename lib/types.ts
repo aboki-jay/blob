@@ -1,5 +1,12 @@
 /** Version of the stored data shape. Bump it and add a migration when the shape changes. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+
+/**
+ * The reactions a comment can be given. A fixed list, so nothing unexpected is
+ * ever stored or shown.
+ */
+export const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+export type Reaction = (typeof REACTIONS)[number];
 
 /** Everything Blob remembers about the element a comment is pinned to. */
 export interface AnchorDescriptor {
@@ -35,6 +42,11 @@ export interface Message {
    * that comment. Comments added to the conversation itself have none.
    */
   replyTo?: string;
+  /**
+   * Reactions the guest has given this comment, each at most once, kept in the
+   * order of REACTIONS. Left out when there are none. (Added in version 2.)
+   */
+  reactions?: Reaction[];
 }
 
 export type ThreadStatus = 'open' | 'resolved';

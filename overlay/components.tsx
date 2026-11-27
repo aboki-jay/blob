@@ -222,6 +222,28 @@ function pageElementAt(x: number, y: number): Element | null {
   return null;
 }
 
+const SCROLLS = new Set(['auto', 'scroll', 'overlay']);
+
+/**
+ * Scrolls whichever scrolling panel of the page lies under a point, as the
+ * wheel would if Blob's layer were not in the way. Returns false when there is
+ * none, which leaves the browser to scroll the page itself.
+ */
+function scrollPanelUnder(x: number, y: number, dx: number, dy: number): boolean {
+  let el: Element | null = document.elementsFromPoint(x, y).find((found) => found.localName !== OVERLAY_TAG) ?? null;
+  for (; el && el !== document.documentElement && el !== document.scrollingElement; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    const left = SCROLLS.has(style.overflowX) && el.scrollWidth > el.clientWidth ? dx : 0;
+    const top = SCROLLS.has(style.overflowY) && el.scrollHeight > el.clientHeight ? dy : 0;
+    if (!left && !top) continue;
+    const before = [el.scrollLeft, el.scrollTop];
+    el.scrollBy({ left, top, behavior: 'instant' });
+    // Already at its end: carry on to whatever contains it, as the browser does.
+    if (el.scrollLeft !== before[0] || el.scrollTop !== before[1]) return true;
+  }
+  return false;
+}
+
 export function Picker({
   hint,
   onPick,
@@ -231,6 +253,24 @@ export function Picker({
 }) {
   const [box, setBox] = useState<DOMRect | null>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
+  const catcher = useRef<HTMLDivElement>(null);
+
+  // The layer covers the page, so the wheel never reaches a panel that scrolls
+  // on its own (common in web apps). Pass it on. The page itself needs no help:
+  // the browser scrolls it from anywhere.
+  useEffect(() => {
+    const layer = catcher.current;
+    if (!layer) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return; // pinch or Ctrl+wheel zoom
+      const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? window.innerHeight : 1;
+      // Shift turns a vertical wheel into sideways scrolling.
+      const [dx, dy] = event.shiftKey && !event.deltaX ? [event.deltaY, 0] : [event.deltaX, event.deltaY];
+      if (scrollPanelUnder(event.clientX, event.clientY, dx * unit, dy * unit)) event.preventDefault();
+    };
+    layer.addEventListener('wheel', onWheel, { passive: false });
+    return () => layer.removeEventListener('wheel', onWheel);
+  }, []);
 
   useEffect(() => {
     const refresh = () => {
@@ -269,6 +309,7 @@ export function Picker({
     <>
       {/* Sits over the whole page and takes every click, so nothing on the page is activated. */}
       <div
+        ref={catcher}
         className="catcher"
         onPointerMove={(event) => {
           pointer.current = { x: event.clientX, y: event.clientY };

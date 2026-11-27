@@ -443,6 +443,152 @@ button {
   height: 19px;
 }
 
+/* ---------- Welcome (first time) ----------
+   From the Figma frame "Main/welcome" (27:319): the picture, heading and line
+   8px apart, then the two buttons 16px below, 268px wide and 12px apart. */
+
+.card--welcome {
+  grid-template-rows: 1fr;
+  place-items: center;
+}
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(304px, 100%);
+}
+
+.welcome__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.welcome__intro h1 {
+  font-family: 'Blob Geist', Geist, 'Blob Inter', Inter, system-ui, sans-serif;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+}
+
+.welcome__intro p {
+  width: min(282px, 100%);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: -0.12px;
+}
+
+.welcome__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(268px, 100%);
+}
+
+.btn--large {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.btn--soft {
+  background: var(--primary-accent);
+  color: var(--primary);
+}
+
+.btn--soft:hover:not(:disabled) {
+  background: var(--primary-focus);
+}
+
+.btn--primary:disabled:hover {
+  background: var(--primary);
+}
+
+/* A small browser window with the mascot in it, on a lilac square. */
+.welcome-art {
+  position: relative;
+  width: 110px;
+  height: 80px;
+}
+
+.welcome-art::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 15px;
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  background: var(--primary-focus);
+}
+
+.welcome-art__window {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 110px;
+  height: 72px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-base);
+  box-shadow: 0 4px 8px rgba(25, 24, 27, 0.08);
+}
+
+.welcome-art__dots {
+  display: flex;
+  gap: 4px;
+}
+
+.welcome-art__dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-fill4);
+}
+
+.welcome-art__body {
+  position: absolute;
+  top: calc(50% + 0.5px);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 40px;
+  transform: translate(-50%, -50%);
+}
+
+.welcome-art__body svg {
+  width: 20px;
+  height: 20px;
+}
+
+.welcome-art__lines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+}
+
+.welcome-art__lines i {
+  width: 100%;
+  height: 5px;
+  border-radius: 1px;
+  background: var(--primary-focus);
+}
+
+.welcome-art__lines i + i {
+  width: 24px;
+}
+
 /* ---------- Recent websites ---------- */
 
 .recent {

@@ -8,16 +8,17 @@ import { useEffect, useState } from 'react';
 import type { Request, Response } from '@/lib/messages';
 import { cleanTitle, getPageInfo, hostLabel, originPattern, safeIconUrl, type PageInfo } from '@/lib/page';
 import { groupBySite, type SiteGroup } from '@/overlay/format';
-import { KEYS, migrate } from '@/lib/storage/store';
+import { KEYS, migrate, parseSettings } from '@/lib/storage/store';
 import { Icon, SiteTile, icons } from '@/overlay/ui';
 
 /**
  * The toolbar popup, from the Figma section "Chrome popup" (guest frame).
  *
- * It does three things: puts Blob on the page you are looking at, lets you
- * choose "Always show" for that one website, and lists the websites you have
- * commented on. Signing in is in the design but not built, so "Login" is shown
- * switched off.
+ * The first time it is opened it shows the welcome screen (Figma "Main/welcome"):
+ * sign in, or continue as a guest. After that it does three things: puts Blob on
+ * the page you are looking at, lets you choose "Always show" for that one
+ * website, and lists the websites you have commented on. Signing in is in the
+ * design but not built, so "Sign in" and "Login" are shown switched off.
  */
 
 type Status =
@@ -76,24 +77,116 @@ function Art({ warning }: { warning?: boolean }) {
   );
 }
 
+/** The little browser-window picture on the welcome screen. */
+function WelcomeArt() {
+  return (
+    <div className="welcome-art" aria-hidden="true">
+      <div className="welcome-art__window">
+        <span className="welcome-art__dots">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="welcome-art__body">
+          <Icon svg={icons.mascot} />
+          <span className="welcome-art__lines">
+            <i />
+            <i />
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown until someone chooses how to use Blob. Signing in is not built, so the
+ * only way on is as a guest.
+ */
+function Welcome({ onContinue }: { onContinue: () => Promise<boolean> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const start = async () => {
+    setBusy(true);
+    setFailed(false);
+    const ok = await onContinue();
+    setBusy(false);
+    if (!ok) setFailed(true);
+  };
+
+  return (
+    <main className="popup">
+      <section className="card card--welcome">
+        <div className="welcome">
+          <div className="welcome__intro">
+            <WelcomeArt />
+            <h1>Leave a thought right where it belongs.</h1>
+            <p>Add comments to the websites you visit. Start as a guest to save your comments on this device.</p>
+          </div>
+          <div className="welcome__actions">
+            <button type="button" className="btn btn--primary btn--large" disabled title="Signing in isn’t available yet">
+              Sign in
+            </button>
+            <button type="button" className="btn btn--soft btn--large" onClick={() => void start()} disabled={busy}>
+              Continue as a Guest
+            </button>
+          </div>
+          {failed && (
+            <p className="note note--error" role="alert">
+              Blob couldn’t save that choice. Try again.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <footer className="footer">
+        <span className="footer__brand">
+          <Icon svg={icons.mascot} />
+          Blob
+        </span>
+      </footer>
+    </main>
+  );
+}
+
 export function Popup() {
   const [status, setStatus] = useState<Status>({ kind: 'loading' });
   const [note, setNote] = useState<Note>(null);
   const [busy, setBusy] = useState(false);
   const [sites, setSites] = useState<SiteGroup[]>([]);
+  /** Whether the welcome screen has been answered. Unknown until storage is read. */
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
     void readStatus().then(setStatus, () => setStatus({ kind: 'unsupported' }));
-    void browser.storage.local.get(KEYS.data).then((raw) => {
-      try {
-        setSites(groupBySite(migrate(raw[KEYS.data])));
-      } catch {
-        setSites([]);
-      }
-    });
+    void browser.storage.local.get([KEYS.data, KEYS.settings]).then(
+      (raw) => {
+        setOnboarded(parseSettings(raw[KEYS.settings]).onboarded);
+        try {
+          setSites(groupBySite(migrate(raw[KEYS.data])));
+        } catch {
+          setSites([]);
+        }
+      },
+      // Storage could not be read: do not hold the popup on a welcome it cannot save.
+      () => setOnboarded(true),
+    );
   }, []);
 
-  if (status.kind === 'loading') return <main className="popup" aria-busy="true" />;
+  if (status.kind === 'loading' || onboarded === null) return <main className="popup" aria-busy="true" />;
+
+  if (!onboarded) {
+    return (
+      <Welcome
+        onContinue={async () => {
+          const reply = await ask({ type: 'settings/set', settings: { onboarded: true } });
+          if (reply.ok) setOnboarded(true);
+          return reply.ok;
+        }}
+      />
+    );
+  }
 
   const ready = status.kind === 'ready' ? status : null;
   const host = ready ? hostLabel(ready.page.origin) : '';

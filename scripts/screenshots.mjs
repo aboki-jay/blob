@@ -32,6 +32,9 @@ const overHero = [hero.x + hero.width / 2, hero.y + hero.height / 2];
 await shot('01-blob-button');
 await page.locator('blob-overlay .blob').click();
 await shot('02-welcome');
+// Pointing at the close button turns its corner red.
+await button('Close Blob').hover();
+await shot('19-close-hover');
 await page.getByLabel('Guest profile').click();
 await button('Dark').click();
 await shot('10-profile-dark');
@@ -64,6 +67,12 @@ await comment.fill('Tried 16px of padding. Much better.');
 await button('Send reply').click();
 await firstComment.hover();
 await shot('07-conversation');
+// Reactions: the smiley opens the choices, and a chosen one stays under the comment.
+await button('Add a reaction').first().click();
+await shot('20-reaction-choices');
+await button('Thumbs up').click();
+await firstComment.hover();
+await shot('21-reaction');
 // The same conversation in the drawer.
 await page.keyboard.press('Escape');
 await page.locator('blob-overlay .blob').click();

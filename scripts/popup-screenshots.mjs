@@ -50,6 +50,13 @@ await page.addInitScript((icon) => {
 await page.goto(`${ORIGIN}/popup.html`);
 await page.evaluate(() => document.fonts.ready);
 await page.waitForTimeout(300);
+// The first time the popup is opened it shows the welcome screen.
+await page.screenshot({ path: out('docs/screenshots/18-popup-welcome.png') });
+console.log('18-popup-welcome');
+
+await page.getByRole('button', { name: 'Continue as a Guest' }).click();
+await page.getByRole('button', { name: 'Use Blob on this page' }).waitFor();
+await page.waitForTimeout(300);
 await page.screenshot({ path: out('docs/screenshots/15-popup.png') });
 console.log('15-popup');
 
