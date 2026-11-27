@@ -12,7 +12,9 @@ This describes what Blob actually does as of Milestone 1.
 
 ## Where
 
-In the extension's own `chrome.storage.local`, on this device. Not in the website's storage. Not on a server: Blob has no backend, and nothing you write is sent anywhere.
+In the extension's own `chrome.storage.local`, on this device. Not in the website's storage. Not on a server: your comments never leave this device.
+
+**Feedback is the one thing Blob sends.** If you fill in the feedback form and press Submit, Blob sends your rating, what you wrote and Blob's version number to the Blob project's feedback service (`blob-feedback.davidokunlola.com`, run on Cloudflare), which emails them to the maintainer and keeps no copy. It does not include the page you are on, your comments, or anything that identifies you; as with any website, the service's host can see the internet address the request came from. Nothing is sent unless you press Submit. Where no feedback service is set up, Submit is switched off and the form offers to start an email in your own mail app instead.
 
 The one thing Blob loads from the web is a website's own icon, to show beside its name. In the toolbar popup it uses the icon address Chrome supplies for the tab you are on; on the page it uses the icon the page declares. Showing it can make one request to that website (or wherever it hosts its icon) for the image, with no referrer. The icon and its address are not saved.
 

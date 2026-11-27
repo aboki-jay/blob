@@ -40,7 +40,10 @@ export type ErrorCode =
   | 'forbidden'
   | 'storage-failed'
   | 'newer-schema'
-  | 'unsupported-page';
+  | 'unsupported-page'
+  /** Feedback: sending is not set up, or the attempt failed. */
+  | 'unavailable'
+  | 'send-failed';
 
 export class BlobError extends Error {
   constructor(

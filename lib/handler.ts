@@ -4,6 +4,7 @@
  */
 
 import { parseRequest, type Response } from './messages';
+import type { FeedbackInput } from './feedback';
 import { cleanTitle, getPageInfo } from './page';
 import { BlobError, type BlobStore } from './storage/store';
 
@@ -18,6 +19,8 @@ export interface HandlerDeps {
   store: BlobStore;
   activateTab(tabId: number): Promise<void>;
   disableSite(origin: string): Promise<void>;
+  /** Feedback delivery. `enabled` is false where no relay is configured. */
+  feedback: { enabled: boolean; send(input: FeedbackInput): Promise<void> };
 }
 
 export async function handleRequest(raw: unknown, sender: Sender, deps: HandlerDeps): Promise<Response> {
@@ -60,6 +63,12 @@ export async function handleRequest(raw: unknown, sender: Sender, deps: HandlerD
         return { ok: true, data: null };
       case 'settings/set':
         return { ok: true, data: await store.updateSettings(request.settings) };
+      case 'feedback/status':
+        return { ok: true, data: { enabled: deps.feedback.enabled } };
+      case 'feedback/send':
+        if (!deps.feedback.enabled) throw new BlobError('unavailable');
+        await deps.feedback.send({ rating: request.rating, text: request.text });
+        return { ok: true, data: null };
       case 'tab/activate':
         if (!sender.fromExtensionPage) throw new BlobError('forbidden');
         await deps.activateTab(request.tabId);

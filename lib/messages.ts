@@ -7,6 +7,7 @@
  */
 
 import { LIMITS, type AnchorAttr, type AnchorDescriptor, type BlobSettings, type ThreadStatus } from './types';
+import { FEEDBACK_MAX, RATINGS, type Rating } from './feedback';
 import type { ErrorCode } from './storage/store';
 
 export type Request =
@@ -17,6 +18,10 @@ export type Request =
   | { type: 'thread/delete'; threadId: string }
   | { type: 'draft/set'; key: string; text: string }
   | { type: 'settings/set'; settings: Partial<BlobSettings> }
+  /** Can feedback be sent from this copy of Blob? */
+  | { type: 'feedback/status' }
+  /** Send the feedback form to the Blob project. The only request that leaves the device. */
+  | { type: 'feedback/send'; rating: Rating; text: string }
   /** Popup only: show Blob on a tab the person just clicked the toolbar button on. */
   | { type: 'tab/activate'; tabId: number }
   /** Popup only: stop showing Blob on a website. Saved comments are kept. */
@@ -123,6 +128,17 @@ export function parseRequest(raw: unknown): Request | null {
         settings.blobPosition = { x: pos.x, y: pos.y };
       }
       return { type: raw.type, settings };
+    }
+    case 'feedback/status':
+      return { type: raw.type };
+    case 'feedback/send': {
+      const rating = raw.rating === undefined ? '' : raw.rating;
+      if (rating !== '' && !(RATINGS as readonly unknown[]).includes(rating)) return null;
+      if (raw.text !== undefined && typeof raw.text !== 'string') return null;
+      const text = (raw.text ?? '').trim();
+      // Something must be said: a rating, some text, or both.
+      if (text.length > FEEDBACK_MAX || (!rating && !text)) return null;
+      return { type: raw.type, rating: rating as Rating, text };
     }
     case 'tab/activate':
       return typeof raw.tabId === 'number' && Number.isInteger(raw.tabId) ? { type: raw.type, tabId: raw.tabId } : null;

@@ -20,7 +20,7 @@ Run `npm run check` and one of the browser test commands before finishing any ch
 
 - Build only the milestone named in docs/STATUS.md.
 - Accounts, sharing, private rooms, real-time features, AI integrations and billing are roadmap items. Do not build them early, and never present a mock network operation as a real feature.
-- Milestone 1 works without a backend, authentication provider, cloud database, AI API or paid service. Keep it that way.
+- Milestone 1 works without a backend, authentication provider, cloud database, AI API or paid service. Keep it that way. The one approved exception is the feedback relay in `worker/feedback/` (a Cloudflare Worker that emails the feedback form to the maintainer). It is optional: with `FEEDBACK_ENDPOINT` in `lib/feedback.ts` set to `''`, Blob sends nothing and nothing else depends on it. Do not route anything else through it.
 - Do not publish to the Chrome Web Store, create paid infrastructure, or use production credentials.
 
 ## Architecture boundaries

@@ -59,7 +59,7 @@ No accounts, API keys or servers are needed.
 
 ## Privacy in one paragraph
 
-Your comments stay in this browser, inside the extension's own storage. Nothing you write is sent anywhere; the only thing Blob fetches is the icon of the website you are on. Blob does not read passwords, form fields or anything you type into a page, and it keeps no browsing history beyond the pages you commented on. Details: [docs/PRIVACY.md](docs/PRIVACY.md).
+Your comments stay in this browser, inside the extension's own storage. Your comments are never sent anywhere. Blob contacts the outside world in two cases only: it fetches the icon of the website you are on, and if you press Submit on the feedback form it sends that feedback to the Blob project. Blob does not read passwords, form fields or anything you type into a page, and it keeps no browsing history beyond the pages you commented on. Details: [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Limitations
 
@@ -74,6 +74,7 @@ entrypoints/   background service worker, toolbar popup, and the on-page overlay
 overlay/       the on-page UI (React, inside a Shadow Root)
 lib/           storage, page identity, anchoring, messages, site access (no UI)
 tests/         unit tests, browser tests and fixture pages
+worker/        the optional feedback relay (a Cloudflare Worker)
 docs/          architecture, privacy, roadmap, status
 ```
 

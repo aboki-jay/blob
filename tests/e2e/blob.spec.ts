@@ -35,6 +35,8 @@ interface Driver {
   failWrites(page: Page, fail: boolean): Promise<void>;
   /** What happens when Chrome reports that site access was removed. */
   revokeSite(page: Page): Promise<void>;
+  /** The last feedback the (stand-in) relay received, or null. */
+  feedbackSent(page: Page): Promise<Record<string, unknown> | null>;
 }
 
 const blobReady = (page: Page) => expect(page.locator('blob-overlay .blob')).toBeVisible();
@@ -57,6 +59,7 @@ function extensionDriver(sw: Worker): Driver {
         chrome.storage.local.set = failing ? () => Promise.reject(new Error('QUOTA_BYTES quota exceeded')) : g.realSet;
       }, fail),
     revokeSite: () => sw.evaluate(() => chrome.storage.local.set({ 'blob:sites': [] })),
+    feedbackSent: async (page) => (await page.request.get(`${ORIGIN}/__feedback`)).json(),
   };
 }
 
@@ -78,6 +81,7 @@ const harnessDriver: Driver = {
       (globalThis as any).__blobHarness.failWrites = failing;
     }, fail),
   revokeSite: (page) => page.evaluate(() => chrome.storage.local.set({ 'blob:sites': [] })),
+  feedbackSent: (page) => page.evaluate(() => (globalThis as any).__blobHarness.feedback.sent.at(-1) ?? null),
 };
 
 const VIEWPORT = { width: 1280, height: 900 };
@@ -722,7 +726,73 @@ test('popup: explains a page Chrome blocks, with nothing to press', async ({ pag
   await expect(page.getByRole('button', { name: 'Use Blob on this page' })).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
 });
-test('approved guest screens fit a narrow viewport and feedback stays local', async ({ page, driver }) => {
+/* ---------- Feedback ---------- */
+
+async function openFeedback(page: Page) {
+  await blob(page).click();
+  await drawer(page).getByLabel('Guest profile').click();
+  await drawer(page).getByRole('button', { name: 'Feedback' }).click();
+}
+
+test('feedback: Submit sends the rating and text to the Blob project, and nothing else', async ({ page, driver }) => {
+  await driver.open(page);
+  await openFeedback(page);
+  const submit = drawer(page).getByRole('button', { name: 'Submit' });
+  const text = drawer(page).getByPlaceholder('Share your feedback');
+  // Nothing chosen or written yet, so there is nothing to send.
+  await expect(submit).toBeDisabled();
+  await expect(drawer(page)).toContainText('Only your feedback is sent to the Blob team.');
+
+  await drawer(page).getByRole('button', { name: 'Good' }).click();
+  await text.fill('Pins are easy to place');
+  await submit.click();
+  await expect(drawer(page).getByRole('status')).toContainText('Thank you. Your feedback was sent.');
+  await expect(text).toHaveValue('');
+
+  const sent = (await driver.feedbackSent(page)) ?? {};
+  expect(sent).toMatchObject({ rating: 'Good', text: 'Pins are easy to place' });
+  // Only the rating, the text and (from the real extension) Blob's version number.
+  expect(Object.keys(sent).filter((key) => key !== 'version').sort()).toEqual(['rating', 'text']);
+  expect(JSON.stringify(sent)).not.toContain('127.0.0.1');
+});
+
+test('feedback: a failed send keeps what was written, and without a relay an email is offered', async ({ page, driver }) => {
+  test.skip(!HARNESS, 'Uses the stand-in relay to force a failure and to switch sending off.');
+  const harness = (change: string) => page.evaluate(`void (${change})`);
+  const submit = drawer(page).getByRole('button', { name: 'Submit' });
+  const text = drawer(page).getByPlaceholder('Share your feedback');
+  const mailto = 'mailto:blob@davidokunlola.com?subject=Blob%20feedback&body=How%20I%20like%20Blob%3A%20Okay%0A%0AThe%20tab%20hides%20too%20fast';
+
+  // The relay is failing: say so, keep the text, and offer the email route.
+  await driver.open(page);
+  await openFeedback(page);
+  await harness('__blobHarness.feedback.fail = true');
+  await drawer(page).getByRole('button', { name: 'Okay' }).click();
+  await text.fill('The tab hides too fast');
+  await submit.click();
+  await expect(drawer(page).getByRole('alert')).toContainText('Couldn’t send it, and nothing was lost.');
+  await expect(text).toHaveValue('The tab hides too fast');
+  await expect(drawer(page).getByRole('link', { name: 'blob@davidokunlola.com' })).toHaveAttribute('href', mailto);
+  expect(await driver.feedbackSent(page)).toBeNull();
+
+  // It recovers: the same text goes through on the next try.
+  await harness('__blobHarness.feedback.fail = false');
+  await submit.click();
+  await expect(drawer(page).getByRole('status')).toContainText('Thank you.');
+  expect(await driver.feedbackSent(page)).toEqual({ rating: 'Okay', text: 'The tab hides too fast' });
+
+  // No relay at all: Submit stays off and the form offers to start an email.
+  await popupSetup(page, { feedback: { enabled: false, fail: false, sent: [] } });
+  await driver.open(page);
+  await openFeedback(page);
+  await drawer(page).getByRole('button', { name: 'Okay' }).click();
+  await text.fill('The tab hides too fast');
+  await expect(submit).toBeDisabled();
+  await expect(drawer(page)).toContainText('Blob can’t send feedback for you yet.');
+  await expect(drawer(page).getByRole('link', { name: 'blob@davidokunlola.com' })).toHaveAttribute('href', mailto);
+});
+
+test('approved guest screens fit a narrow viewport', async ({ page, driver }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await driver.open(page);
   await blob(page).click();
@@ -733,13 +803,7 @@ test('approved guest screens fit a narrow viewport and feedback stays local', as
   await drawer(page).getByRole('button', { name: 'Feedback' }).click();
   await drawer(page).getByRole('button', { name: 'Good' }).click();
   await expect(drawer(page).getByRole('button', { name: 'Good' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(drawer(page).getByRole('button', { name: 'Submit' })).toBeDisabled();
-  // Blob sends nothing itself; it offers an email, started with what was chosen and written.
-  await drawer(page).getByPlaceholder('Share your feedback').fill('Pins are easy to place');
-  await expect(drawer(page).getByRole('link', { name: 'blob@davidokunlola.com' })).toHaveAttribute(
-    'href',
-    'mailto:blob@davidokunlola.com?subject=Blob%20feedback&body=How%20I%20like%20Blob%3A%20Good%0A%0APins%20are%20easy%20to%20place',
-  );
+  await expect(drawer(page).getByRole('button', { name: 'Submit' })).toBeEnabled();
   await drawer(page).getByLabel('Close feedback').click();
   await drawer(page).getByRole('button', { name: 'Continue as a Guest' }).click();
   await page.getByRole('button', { name: 'Add a Blob' }).click();

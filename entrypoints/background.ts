@@ -1,3 +1,4 @@
+import { FEEDBACK_ENDPOINT, postFeedback } from '@/lib/feedback';
 import { handleRequest, type Sender } from '@/lib/handler';
 import { activateTab, disableSite, showOnOpenTabs, syncSites } from '@/lib/sites';
 import { BlobStore, type StorageArea } from '@/lib/storage/store';
@@ -21,6 +22,10 @@ export default defineBackground(() => {
       store,
       activateTab,
       disableSite: (pattern) => disableSite(pattern, store),
+      feedback: {
+        enabled: Boolean(FEEDBACK_ENDPOINT),
+        send: (input) => postFeedback(input, browser.runtime.getManifest().version),
+      },
     }).then(sendResponse);
     return true; // the response is sent asynchronously
   });

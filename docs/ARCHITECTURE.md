@@ -90,6 +90,16 @@ Pins are drawn from the element's current box on every scroll, resize and layout
 - Injecting twice does nothing. A copy left by an older version of the extension removes itself when a new one arrives.
 - On unmount the element, all listeners and observers, and the fonts are removed.
 
+## Feedback relay
+
+The only server-side piece, and the only request Blob makes with someone's words in it. It is optional and separate from commenting.
+
+- The feedback form sends `feedback/send` (rating and text) to the background, like any other request. The background posts it, with Blob's version number, to `FEEDBACK_ENDPOINT` (`lib/feedback.ts`). The overlay never calls the network itself.
+- The endpoint is the Worker in `worker/feedback/`, served at `blob-feedback.davidokunlola.com`. It validates the input again, limits each sender to a few messages a minute, and emails the feedback to the maintainer through Cloudflare Email Sending. The recipient is a Worker secret. It stores nothing.
+- No host permission is needed: the Worker allows requests from any origin, and no cookies or credentials are sent.
+- With `FEEDBACK_ENDPOINT` empty, the background reports feedback as unavailable, Submit stays off, and the form offers an email link.
+- Browser tests use a stand-in relay on the fixture server, so no test sends real feedback.
+
 ## Not supported
 
 Content inside embedded frames, closed shadow roots, canvas-drawn interfaces, PDFs, local files, and browser pages (`chrome://`, the Chrome Web Store). Elements inside an open shadow root are anchored to the component that contains them.

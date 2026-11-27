@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 25 November 2026
+Last updated: 27 November 2026
 
 Milestone 1 implements local guest comments. The production build and browser harness have been exercised locally. The next design check is a walkthrough of the unpacked extension in Chrome, including the toolbar and permission prompt.
 
@@ -8,7 +8,7 @@ Milestone 1 implements local guest comments. The production build and browser ha
 
 The [Approved for Implementation page](https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=297-6696) is the visual reference for all six sections. Review Welcome and Empty state, Bottom navigation, Comment tags, Feedback, History and Activity using the production build. New demo captures in `docs/screenshots/` show the guest flows, profile appearance menu, feedback hover state and expanded History. Captures use the production overlay in headless Chromium with stand-in extension APIs.
 
-Account examples use local guest data. Feedback supports rating and text entry; Submit is disabled pending a delivery service. Per-message reactions and signed-in examples remain outside the implemented guest flows. Manual Chrome visual sign-off is pending.
+Account examples use local guest data. Feedback supports rating and text entry; Submit sends through the feedback relay (see "Known problems and limitations" for what is still to finish). Per-message reactions and signed-in examples remain outside the implemented guest flows. Manual Chrome visual sign-off is pending.
 
 ## What works
 
@@ -29,10 +29,10 @@ Account examples use local guest data. Feedback supports rating and text entry; 
 | --- | --- |
 | Local real-extension run during the approved design pass | Chromium loaded the extension. Six tests passed. Seven were marked failed because closing the browser context exceeded Playwright's 45-second teardown timeout. This run did not establish a clean real-extension pass. |
 | `npm run typecheck` | Passes. |
-| `npm test` | 54 unit tests pass: page identity and URL sanitising, storage (reload persistence, failed writes, duplicate-safe retry, concurrent updates, schema versions), request validation and permissions, anchoring (repeated text, moved target, removed target, private fields). |
+| `npm test` | 71 unit tests pass: page identity and URL sanitising, storage (reload persistence, failed writes, duplicate-safe retry, concurrent updates, schema versions), request validation and permissions, anchoring (repeated text, moved target, removed target, private fields), and the feedback relay's logic with a stand-in for Cloudflare's email service. |
 | `npm run build` | Production build succeeds. |
 | `npm run check:manifest` | Generated manifest asks only for `activeTab`, `scripting`, `storage`, with optional per-site access. No `host_permissions`, `content_scripts` or `web_accessible_resources`. |
-| `npm run test:e2e:harness` | 12 browser tests pass, 1 skipped (the popup test, which needs the real extension). These run the real built overlay script in headless Chromium on the fixture pages, with stand-in extension APIs. Covered: the guest journey through reload, reply, resolve and reopen; separate pages on one website; History grouping; repeated text, moved and removed targets, reattach; Escape; failed save and retry; nothing typed into the page being stored; single-page app navigation; docked tab movement and keyboard use; guest profile, feedback and navigation at 360px; host-page style conflicts; delete confirmation; removal when site access is lost. |
+| `npm run test:e2e:harness` | 20 browser tests pass, 1 skipped (a popup test that needs the real extension); last run 27 November 2026. These run the real built overlay script in headless Chromium on the fixture pages, with stand-in extension APIs. Covered: the guest journey through reload, reply, resolve and reopen; separate pages on one website; History grouping; repeated text, moved and removed targets, reattach; Escape; failed save and retry; nothing typed into the page being stored; single-page app navigation; docked tab movement and keyboard use; guest profile, feedback and navigation at 360px; host-page style conflicts; delete confirmation; removal when site access is lost. |
 | `npm run test:e2e` on CI | First run (pull request 1): the real built extension in Chromium, 11 of 12 passed, including the popup test. The one failure was a pin-order assumption: Chrome's storage returns saved items in alphabetical key order, not saving order. Pins are now ordered by number, and the harness mimics Chrome's ordering so this class of mistake fails locally too. The rerun after that fix should be checked on the pull request. |
 | Visual comparison with Figma | Screenshots in `docs/screenshots/` were compared by eye with the welcome, empty, composer, conversation and History frames. |
 
@@ -64,7 +64,13 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 
 ## Known problems and limitations
 
-- The project's contact address is blob@davidokunlola.com (Cloudflare Email Routing, forwarding to the maintainer's inbox; receive-only). The feedback screen still cannot deliver feedback itself: Submit stays switched off, and a link starts an email to that address in the person's own mail app with their rating and text filled in.
+- The project's contact address is blob@davidokunlola.com (Cloudflare Email Routing, forwarding to the maintainer's inbox; receive-only).
+- Feedback: the form's Submit button sends the rating and text to the Blob project through the relay in `worker/feedback/` (see its README). The relay was deployed to Cloudflare on 27 November 2026 at `https://blob-feedback.davidokunlola.com/`, and `FEEDBACK_ENDPOINT` in `lib/feedback.ts` points to it, so Submit is switched on in the real build.
+  - Checked against the live relay from a terminal: it answers on that address, answers the browser's pre-check with the headers an extension needs, refuses anything that is not a `POST`, and the per-sender limit was accepted by Cloudflare's free plan. Cloudflare's default `workers.dev` address is switched off and answers 404.
+  - The inbox secret (`FEEDBACK_TO`) was set by the maintainer in the Cloudflare dashboard. One real test message was then posted to the live relay from a terminal and it answered `{"ok":true}`. Invalid input is refused with `400`. The maintainer confirmed the email arrived in the inbox.
+  - **The per-sender limit is loose.** It is set to 5 a minute, but Cloudflare's limiter counts approximately: 33 invalid requests sent one after another over about two minutes were all let through, and it only started refusing (`429`) during a burst of 60 at once, and then only some of them. It will blunt a flood, not stop a patient sender. A firm limit would need the relay to keep a counter somewhere, which it does not do today.
+  - Not checked: Submit pressed in real Chrome against the live relay. The form and the Worker's logic are covered by unit and browser tests with stand-ins only.
+  - The domain's own website has a catch-all route that answered for the relay's address at first; the relay has a second, exact route to take priority (explained in the relay's README).
 
 - Bottom navigation (shown while choosing where to comment): collapsed, pointing at or keyboard-focusing an item shows its name in a pill 5px under the bar, from the Figma "Bottom navigation" section (the pill is "Frame 47"). The bar now sits 45px above the bottom of the window to leave the pill room. Expanded, the names are written out and there are no pills. The guest bar shows no count badges, matching the "Collapsed view/Guest" frame; the badges in "Collapsed view/Active" belong to the signed-in bar, which is not built.
 

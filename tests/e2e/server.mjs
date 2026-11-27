@@ -10,8 +10,21 @@ const root = fileURLToPath(new URL('../fixtures/', import.meta.url));
 const built = fileURLToPath(new URL('../../.output/chrome-mv3/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png' };
 
+// A stand-in for the feedback relay, so the browser tests never send real feedback.
+const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+let lastFeedback = null;
+
 createServer(async (request, response) => {
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+  if (path === '/__feedback') {
+    if (request.method === 'POST') {
+      let body = '';
+      for await (const chunk of request) body += chunk;
+      lastFeedback = JSON.parse(body);
+    }
+    response.writeHead(request.method === 'OPTIONS' ? 204 : 200, { ...cors, 'content-type': 'application/json' });
+    return response.end(request.method === 'GET' ? JSON.stringify(lastFeedback) : JSON.stringify({ ok: true }));
+  }
   if (path === '/__blob-fixtures') {
     response.writeHead(200, { 'content-type': 'text/plain' });
     return response.end('ok');

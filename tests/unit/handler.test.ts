@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { handleRequest, type HandlerDeps, type Sender } from '@/lib/handler';
 import { parseAnchor, parseRequest } from '@/lib/messages';
-import { BlobStore, KEYS, parseDrafts, readData } from '@/lib/storage/store';
+import { BlobError, BlobStore, KEYS, parseDrafts, readData } from '@/lib/storage/store';
 import { FakeArea, anchor, id } from './helpers';
 
 const page: Sender = { pageOrigin: 'https://example.com', fromExtensionPage: false };
@@ -9,7 +9,12 @@ const popup: Sender = { fromExtensionPage: true };
 
 function setup() {
   const area = new FakeArea();
-  const deps: HandlerDeps = { store: new BlobStore(area), activateTab: vi.fn(async () => undefined), disableSite: vi.fn(async () => undefined) };
+  const deps: HandlerDeps = {
+    store: new BlobStore(area),
+    activateTab: vi.fn(async () => undefined),
+    disableSite: vi.fn(async () => undefined),
+    feedback: { enabled: true, send: vi.fn(async () => undefined) },
+  };
   return { area, deps };
 }
 
@@ -134,5 +139,47 @@ describe('who may ask for what', () => {
     await handleRequest(createMessage(), page, deps);
     await handleRequest({ type: 'site/disable', origin: 'https://example.com/*' }, popup, deps);
     expect(Object.keys((await readData(area)).threads)).toHaveLength(1);
+  });
+});
+
+describe('feedback', () => {
+  it('passes on a rating and trimmed text, and nothing else', async () => {
+    const { deps } = setup();
+    const response = await handleRequest({ type: 'feedback/send', rating: 'Good', text: '  Lovely  ', page: 'https://bank.example/', comments: ['x'] }, page, deps);
+    expect(response).toEqual({ ok: true, data: null });
+    expect(deps.feedback.send).toHaveBeenCalledWith({ rating: 'Good', text: 'Lovely' });
+  });
+
+  it('needs a rating or some text, a known rating, and a sensible length', async () => {
+    const { deps } = setup();
+    for (const bad of [{}, { text: '   ' }, { rating: 'Superb', text: 'x' }, { rating: 'Good', text: 7 }, { text: 'x'.repeat(2001) }]) {
+      expect(await handleRequest({ type: 'feedback/send', ...bad }, page, deps)).toEqual({ ok: false, error: 'invalid' });
+    }
+    expect(await handleRequest({ type: 'feedback/send', text: 'Text alone is fine' }, page, deps)).toMatchObject({ ok: true });
+    expect(deps.feedback.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('says whether sending is set up, and refuses to send when it is not', async () => {
+    const { deps } = setup();
+    expect(await handleRequest({ type: 'feedback/status' }, page, deps)).toEqual({ ok: true, data: { enabled: true } });
+    deps.feedback.enabled = false;
+    expect(await handleRequest({ type: 'feedback/status' }, page, deps)).toEqual({ ok: true, data: { enabled: false } });
+    expect(await handleRequest({ type: 'feedback/send', text: 'Hello' }, page, deps)).toMatchObject({ ok: false, error: 'unavailable' });
+    expect(deps.feedback.send).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed delivery as a failure', async () => {
+    const { deps } = setup();
+    deps.feedback.send = vi.fn(async () => {
+      throw new BlobError('send-failed');
+    });
+    expect(await handleRequest({ type: 'feedback/send', rating: 'Okay' }, page, deps)).toMatchObject({ ok: false, error: 'send-failed' });
+  });
+});
+
+describe('the feedback relay and the form agree', () => {
+  it('on the list of ratings', async () => {
+    const [{ RATINGS: form }, { RATINGS: relay }] = await Promise.all([import('@/lib/feedback'), import('@/worker/feedback/src/index')]);
+    expect([...form]).toEqual([...relay]);
   });
 });

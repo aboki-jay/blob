@@ -9,7 +9,7 @@
  */
 
 import { handleRequest } from '@/lib/handler';
-import { BlobStore, type StorageArea } from '@/lib/storage/store';
+import { BlobError, BlobStore, type StorageArea } from '@/lib/storage/store';
 
 type Listener = (...args: any[]) => void;
 
@@ -42,6 +42,8 @@ const harness = {
   acceptPrompt: true,
   /** For the popup: what it asked the background to do. */
   requests: [] as unknown[],
+  /** The feedback relay: whether one exists, whether it is failing, and what it was sent. */
+  feedback: { enabled: true, fail: false, sent: [] as unknown[] },
   /** Sends a command to the overlay, as the popup or background would. */
   command(message: unknown) {
     messageListeners.forEach((listener) => listener(message, { id: 'blob-harness' }, () => undefined));
@@ -89,6 +91,13 @@ const fake = {
           activateTab: async () => undefined,
           disableSite: async (pattern) => {
             harness.granted = harness.granted.filter((p) => p !== pattern);
+          },
+          feedback: {
+            enabled: harness.feedback.enabled,
+            send: async (input) => {
+              if (harness.feedback.fail) throw new BlobError('send-failed');
+              harness.feedback.sent.push(input);
+            },
           },
         },
       );
