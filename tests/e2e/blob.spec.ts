@@ -127,6 +127,21 @@ const pins = (page: Page) => page.locator('blob-overlay .pin');
 const composer = (page: Page) => page.locator('blob-overlay .comment-tag');
 const tag = composer;
 
+/**
+ * Waits for anything still moving inside Blob (the card sliding in, the reaction
+ * choices popping open) to come to rest. Positions measured mid-movement are a
+ * few pixels off, and a fast machine measures sooner than a slow one.
+ */
+const settled = (page: Page) =>
+  page.locator('blob-overlay').evaluate((host) =>
+    Promise.all(
+      host
+        .shadowRoot!.getAnimations()
+        .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime as number))
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ).then(() => undefined),
+  );
+
 async function continueAsGuest(page: Page) {
   await blob(page).click();
   await page.getByRole('button', { name: 'Continue as a Guest' }).click();
@@ -349,6 +364,8 @@ test('reactions: add one from the smiley, see it stay, take it back', async ({ p
   await continueAsGuest(page);
   await comment(page, '#hero', 'Could this be rounder?');
   await pins(page).click();
+  await expect(tag(page)).toBeVisible();
+  await settled(page);
   const first = tag(page).locator('.tag-comment').first();
   const chip = first.locator('.tag-reaction');
   const stored = async () => (await threads(driver, page))[0]?.messages[0]?.reactions;
@@ -373,7 +390,7 @@ test('reactions: add one from the smiley, see it stay, take it back', async ({ p
   await expect(choices.getByRole('button')).toHaveCount(6);
   await expect(choices).toHaveText('👍❤️😂😮😢🙏');
   await expect(choices).toHaveCSS('visibility', 'visible');
-  await expect.poll(async () => (await choices.boundingBox())!.height).toBeGreaterThan(40); // opening animation finished
+  await settled(page);
   const [pill, smiley, card] = [(await choices.boundingBox())!, (await add.boundingBox())!, (await tag(page).boundingBox())!];
   expect(Math.round(smiley.y - (pill.y + pill.height))).toBe(8);
   expect(Math.round(smiley.x - pill.x)).toBe(8);
