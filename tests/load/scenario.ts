@@ -50,6 +50,12 @@ export interface LoadOptions {
   realTime: boolean;
   /** Makes the "random" choices repeatable. */
   seed: number;
+  /**
+   * True: when it is over, every person deletes their account, so a server that
+   * keeps its data between runs (the test copy on Cloudflare) is left empty.
+   * A deletion that fails counts as a failed request.
+   */
+  tidy?: boolean;
 }
 
 export const AGREED: LoadOptions = { people: 150, conversations: 15, rounds: 12, windowMs: 10_000, realTime: false, seed: 150 };
@@ -169,6 +175,7 @@ export async function runLoad(transport: Transport, options: LoadOptions = AGREE
 
   if (people.length < options.people || conversations.length < options.conversations) {
     // Nothing useful can be measured without the cast. The failures say why.
+    await tidy();
     return finish();
   }
 
@@ -223,7 +230,13 @@ export async function runLoad(transport: Transport, options: LoadOptions = AGREE
     for (const id of seen.keys()) if (id !== conversation.rootId && !conversation.sent.has(id)) unexpected++;
   }
 
+  await tidy();
   return finish({ repliesSent, repliesRetried, lost, doubled, unexpected });
+
+  /** Everyone deletes their account, all at once. Deleting an account deletes all that was theirs. */
+  async function tidy() {
+    if (options.tidy) await Promise.all(people.map((person) => request('tidy', 'DELETE', '/me', person.token)));
+  }
 
   function finish(counts = { repliesSent: 0, repliesRetried: 0, lost: 0, doubled: 0, unexpected: 0 }): LoadReport {
     const timings: Record<string, Timing> = {};

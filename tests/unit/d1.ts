@@ -57,6 +57,11 @@ export function createTestDb(): TestDb {
   };
 
   const execute = (sql: string, values: unknown[]): DbResult => {
+    // Cloudflare's database refuses a LIKE or GLOB pattern longer than 50
+    // characters; plain SQLite does not. That difference let a bug through to
+    // the deployed test copy once. The server has no need of either, so here
+    // they are refused outright, the way Cloudflare words it.
+    if (/\b(LIKE|GLOB)\b/i.test(sql.replace(/'[^']*'/g, "''"))) throw new Error('D1_ERROR: LIKE or GLOB pattern too complex: SQLITE_ERROR');
     count('statements');
     const statement = raw.prepare(sql);
     const bound = values.map((value) => (typeof value === 'boolean' ? Number(value) : value)) as (string | number | null)[];

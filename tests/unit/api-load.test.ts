@@ -16,8 +16,7 @@ import { createServer } from './api-helpers';
 const STATEMENTS_ALLOWED = 50;
 const STATEMENTS_EXPECTED = 8;
 
-function inProcess(): Transport {
-  const server = createServer();
+function inProcess(server = createServer()): Transport {
   return {
     advance: (ms) => {
       server.clock.now += ms;
@@ -63,5 +62,23 @@ describe('150 people at the same time', () => {
     const report = await runLoad(inProcess(), { ...AGREED, seed: 7, conversations: 3 });
     expect(report.failures.slice(0, 5)).toEqual([]);
     expect(report.passed).toBe(true);
+  }, 60_000);
+
+  it('leaves nothing behind when everyone then deletes their account at once', async () => {
+    const server = createServer();
+    const report = await runLoad(inProcess(server), { ...AGREED, tidy: true });
+    expect(report.failures.slice(0, 5)).toEqual([]);
+    expect(report.passed).toBe(true);
+    expect(report.timings.tidy!.count).toBe(150);
+
+    const left = (table: string) => (server.db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+    expect(Object.fromEntries(['accounts', 'identities', 'sessions', 'shares', 'messages', 'counters'].map((table) => [table, left(table)]))).toEqual({
+      accounts: 0,
+      identities: 0,
+      sessions: 0,
+      shares: 0,
+      messages: 0,
+      counters: 0,
+    });
   }, 60_000);
 });

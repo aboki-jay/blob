@@ -73,22 +73,35 @@ The scenario is the one agreed in the plan: 150 people open a shared conversatio
 
 Only the last one says anything about Cloudflare's capacity. Never point the load test at the real service; it would stop at the sign-in anyway.
 
-## Deploying the test copy (maintainer)
+When it is over, the 150 people it made delete their accounts, so the server it ran against is left empty. Results so far are in [docs/MILESTONE-2.md](../../docs/MILESTONE-2.md), "Load test results so far".
 
-Needed before the last row of that table can be run. Not done yet.
+## The walk-through of every request
 
 ```bash
-cd worker/api
-npx wrangler login
-npx wrangler d1 create blob-test
+npm run test:smoke -- --url https://blob-api-test.<you>.workers.dev
 ```
 
-Put the id it prints into `wrangler.jsonc`, under `env` > `test` > `database_id`. Then:
+Two test people share, read, reply, retry, delete, stop sharing, sign out and delete their accounts, once each, and every answer is checked. It takes under a minute and leaves nothing behind.
+
+It exists because Cloudflare's database is not quite plain SQLite. The first deploy of the test copy failed at deleting an account: **D1 refuses a `LIKE` or `GLOB` pattern longer than 50 bytes**, and neither the stand-in database in the unit tests nor `wrangler dev` does. The server's statements now use neither (match a prefix with a range, as `keysOf` in `src/store.ts` does), and the stand-in refuses both. Run the walk-through after every deploy of the test copy, before the load test.
+
+## Deploying the test copy (maintainer)
+
+Done once, on 28 November 2026: the test database `blob-test` exists (its id is in `wrangler.jsonc`, under `env` > `test`) and the test copy `blob-api-test` is deployed at its own `workers.dev` address. That address includes the Cloudflare account's name, so it is not written in this repository; `npx wrangler deploy --env test` prints it.
+
+After a change to the server, from `worker/api`, signed in with `npx wrangler login`:
 
 ```bash
-npx wrangler d1 migrations apply blob-test --remote --env test
+npx wrangler d1 migrations apply blob-test --remote --env test   # only if a migration was added
 npx wrangler deploy --env test
-npx wrangler secret put FINGERPRINT_KEY --env test
+```
+
+Then the walk-through and the load test above. Wrangler warns that `PUBLIC_ORIGIN` is not copied to the test copy; that is intended, so the test copy makes links at its own address.
+
+The test copy has no `FINGERPRINT_KEY`; its test-only sign-in uses a fixed stand-in. The real service needs one before real sign-in exists:
+
+```bash
+npx wrangler secret put FINGERPRINT_KEY
 ```
 
 For the key, type any long random text. It is what sign-in identities are scrambled with, and it must never be written into the repository.

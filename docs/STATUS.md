@@ -4,7 +4,7 @@ Last updated: 28 November 2026
 
 Milestone 1 implements local guest comments. On 28 November 2026 the maintainer reported that Milestone 1 had been checked in Chrome and accepted it. Which steps of the manual walkthrough were covered was not written down, so the "Not verified" list below is left as it was. Its pull request was merged into `main` on 28 November 2026.
 
-Milestone 2 (shared threads) is in progress on the branch `milestone-2-shared-threads`. Step 1 is built: the sharing server in `worker/api/`, its access rules, and the 150-person load test. It is not deployed and the extension does not use it yet, so nothing has changed for anyone using Blob. See "Milestone 2, step 1" below.
+Milestone 2 (shared threads) is in progress on the branch `milestone-2-shared-threads`. Step 1 is built: the sharing server in `worker/api/`, its access rules, and the 150-person load test, which passed against a test copy on Cloudflare on 28 November 2026. The real service is not deployed and the extension does not use any server yet, so nothing has changed for anyone using Blob. See "Milestone 2, step 1" below.
 
 ## Approved design review
 
@@ -61,7 +61,7 @@ Verification for these changes: `npm run check` passed (78 unit tests, productio
 
 ## Milestone 2, step 1: the sharing server
 
-Built 28 November 2026 in `worker/api/`. **Not deployed. The extension does not call it. Google sign-in is not built**, so the only way to have an account is a test-only sign-in that the real service cannot have.
+Built 28 November 2026 in `worker/api/`. **Only a test copy is deployed (`blob-api-test`, with its own database `blob-test`); the real service is not. The extension does not call either. Google sign-in is not built**, so the only way to have an account is a test-only sign-in that the real service cannot have.
 
 What exists:
 
@@ -77,13 +77,21 @@ How it was verified:
 | --- | --- |
 | Access rules (`tests/unit/api.test.ts`, 28 tests) | Pass. Run against the real request handler and the real database statements, with a stand-in database built on SQLite, which is what Cloudflare's database is. Covers: nothing shown without signing in; reading and replying with a link; retries never repeating; only the owner stopping; all four expiry choices at their exact deadline with a controlled clock; a fresh link on sharing again; deleting your own reply only; account deletion removing everything of yours and nothing of anyone else's; limits holding against a burst; bad input refused; "busy" when the database fails. |
 | 150-person load test in the unit tests | Pass. About 2,200 requests and 620 replies, one in ten sent twice on purpose: none failed, none lost, none doubled. The heaviest request needed 6 database statements, against 50 allowed. |
+| CI on the pull request ([aboki-jay/blob#2](https://github.com/aboki-jay/blob/pull/2), run 13 on `03095c2`, 28 November 2026) | Pass, read from the logs. The server's tests and the 150-person load test passed on CI's Linux machine as they do on the development machine (2,217 requests, 616 replies, 57 sent twice, heaviest request 6 statements). The worker configuration check passed. Browser tests: stand-in run 30 passed and 1 skipped; real-extension run 25 passed and 6 skipped. |
 | The load test noticing faults (5 tests) | Pass. A dropped reply, a doubled reply, an invented comment and a single refused request each make it fail. |
 | The same load test against the server on Cloudflare's own runtime and database engine, run locally with `wrangler dev` | Pass, twice: once with every wave of 150 fired at the same instant, once spread over two real minutes. This also confirmed the database statements work on the real engine, not only the stand-in. |
 
+| Every kind of request, once each, against the test copy on Cloudflare (`npm run test:smoke`, 41 steps) | Pass, after one fix. The first deploy failed at deleting an account: Cloudflare's database refuses a text pattern longer than 50 characters, which neither the stand-in nor `wrangler dev` does. The statement no longer uses a pattern, and the stand-in now refuses them. |
+| **The 150-person load test against the test copy on Cloudflare**, spread over two real minutes, with the one-second pass mark (`--real-time --judge-time`), run twice | **Pass, both times.** No request failed, no reply lost or doubled. 95 in 100 reads arrived within 392 and 446 ms; 95 in 100 replies within 446 and 494 ms. Figures are in [MILESTONE-2.md](MILESTONE-2.md), "Load test results so far". |
+| The same with every wave of 150 fired at the same instant (harsher; times not judged) | Pass on correctness. Responses queue to about 1.4 seconds. |
+
+The load test now ends with all 150 people deleting their accounts, so the test copy is left empty; the database was counted afterwards and held nothing.
+
 Not verified:
 
-- **Anything on Cloudflare itself.** The test copy has not been deployed, so real response times are unknown and the "95 in 100 within one second" pass mark is unjudged.
-- The timer that deletes expired conversations has only been run by calling it directly, never by Cloudflare's scheduler.
+- The timer that deletes expired conversations has only been run by calling it directly, and its three statements by hand on Cloudflare's database (accepted). Cloudflare's scheduler is set to run it every 15 minutes on the test copy, but no run of it was watched.
+- The Cloudflare timings are from one afternoon, one connection and an empty database. Nothing is known about other regions or a database holding months of conversations.
+- The test copy has no `FINGERPRINT_KEY` secret; the test-only sign-in uses a fixed stand-in key. The real service must have its own before real sign-in exists.
 - The local timings in MILESTONE-2.md come from one development machine and say nothing about production.
 
 Decisions made while building, for the maintainer to know:
@@ -189,9 +197,9 @@ Milestone 1 is accepted by the maintainer. Close it out, then begin Milestone 2.
 
 1. Merge the Milestone 1 pull request. CI is green on `c452833` (run 10, 28 November 2026), read from the log: stand-in run 30 passed and 1 skipped, real-extension run 25 passed and 6 skipped, no retries. Merging is the maintainer's decision; do not merge without being asked.
 2. The open items in [MILESTONE-2.md](MILESTONE-2.md) were all settled with the maintainer by 28 November 2026; its "Still to confirm" list is empty. What remains before step 3 is for the maintainer to create the Google sign-in client and the D1 database it lists. (The Resend account is only needed for the last step.)
-3. Step 1 of Milestone 2 is built on the branch `milestone-2-shared-threads` (see "Milestone 2, step 1" above). Two things follow, in either order:
-   - **The maintainer deploys the test copy** and the load test is run against Cloudflare with `--real-time --judge-time`. Instructions are in [worker/api/README.md](../worker/api/README.md). This is the only way to learn real response times.
+3. Step 1 of Milestone 2 is built on the branch `milestone-2-shared-threads`, and the load test passed against the test copy on Cloudflare on 28 November 2026 (see "Milestone 2, step 1" above). Next:
    - **Step 2: sign in and sign out in the extension**, with Google sign-in. It needs the maintainer's Google Cloud project with a "Sign in with Google" client. It adds the `identity` permission, so the manifest check changes on purpose.
+   - After any change to the server: `npm run check`, redeploy the test copy, `npm run test:smoke` against it, then the load test with `--real-time --judge-time`. Commands are in [worker/api/README.md](../worker/api/README.md).
 
 Earlier notes, kept for the record:
 

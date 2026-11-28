@@ -5,7 +5,8 @@
 //
 // Only ever point this at a developer's machine or the test copy. It signs in
 // through the test-only sign-in, which the real service does not have, so
-// against the real service it stops at once without doing anything.
+// against the real service it stops at once without doing anything. When it
+// is over, the people it made delete their accounts, so nothing is left behind.
 //
 //   --real-time    spread the actions over real time, as people would be
 //                  (about two minutes). Without it they are fired together.
@@ -62,13 +63,13 @@ if (health.status !== 200) {
 }
 
 console.log(`Load test: ${people} people against ${base}, ${realTime ? 'in real time (about two minutes)' : 'all at once'}.`);
-const report = await runLoad(transport, { ...AGREED, people, conversations: Math.max(1, Math.round(people / 10)), realTime });
+const report = await runLoad(transport, { ...AGREED, people, conversations: Math.max(1, Math.round(people / 10)), realTime, tidy: true });
 
 const row = (kind: string) => {
   const t = report.timings[kind];
   return t ? `  ${kind.padEnd(8)} ${String(t.count).padStart(5)} requests   half within ${t.p50} ms   95 in 100 within ${t.p95} ms   slowest ${t.max} ms` : '';
 };
-console.log(['sign-in', 'share', 'read', 'reply', 'check'].map(row).filter(Boolean).join('\n'));
+console.log(['sign-in', 'share', 'read', 'reply', 'check', 'tidy'].map(row).filter(Boolean).join('\n'));
 console.log(`  ${report.requests} requests in all; ${report.repliesSent} replies, ${report.repliesRetried} of them sent twice on purpose.`);
 console.log(`  Failed requests: ${report.failures.length}.  Replies lost: ${report.lost}.  Doubled: ${report.doubled}.  Unexpected: ${report.unexpected}.`);
 if (report.failures.length) {

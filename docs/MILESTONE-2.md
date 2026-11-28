@@ -148,7 +148,15 @@ The agreed scenario: 150 people, about 2,200 requests, about 620 replies of whic
 | In the unit tests, against the server's code with a stand-in database | Passed. No request failed; no reply lost or doubled. |
 | On the development machine, against the server running on Cloudflare's own runtime and database engine (`wrangler dev`), every wave of 150 fired at the same instant | Passed, the same. Responses took 1.5 to 2.3 seconds, which is that machine working through 150 requests at once, not a measure of Cloudflare. |
 | The same, with actions spread over two real minutes as people's would be | Passed, the same. Half of reads within 19 ms and 95 in 100 within 91 ms; replies 26 ms and 66 ms. A few took over two seconds while the machine was also running other tests. |
-| Against a test copy on Cloudflare | **Not run.** It needs the maintainer to create the test database and deploy the test copy (see `worker/api/README.md`). Until then nothing is known about real response times, and the one-second pass mark is unjudged. |
+| Against the test copy on Cloudflare, actions spread over two real minutes as people's would be (the agreed test), run twice | **Passed both times.** 2,232 and 2,382 requests, 627 replies, 72 sent twice: none failed, none lost, none doubled. Reads: half within 233 ms, 95 in 100 within 392 and 446 ms. Replies: half within 246 ms, 95 in 100 within 446 and 494 ms. The pass mark is one second. The slowest single read took 1.7 seconds and the slowest reply 2.0. |
+| Against the test copy on Cloudflare, every wave of 150 fired at the same instant (harsher than agreed; times not judged) | Passed on correctness: 2,367 requests, none failed, none lost, none doubled. Responses queue: half within about 940 ms, 95 in 100 within about 1.36 seconds. |
+
+What the Cloudflare runs showed, beyond the pass:
+
+- **The database takes requests one at a time, and it shows.** At the agreed pace (about 15 requests a second) there is plenty of room. When 150 arrive in the same instant they queue and the last waits about 1.4 seconds. Nobody is refused; they wait.
+- **Signing in and deleting an account are the slow actions**: about 1.5 seconds each when all 150 do it in the same instant, which is how the test sets up and tidies. They are not part of the pass mark, and 150 people do not sign in in the same instant, but this is the first place a real rush would be felt.
+- **The first deploy found a fault the other tests could not.** Deleting an account failed on Cloudflare, because Cloudflare's database refuses a text pattern longer than 50 characters and plain SQLite does not. The statement was rewritten without a pattern, the stand-in database now refuses patterns outright, and `npm run test:smoke` walks through every kind of request against a deployed copy so the next difference of this kind is found in a minute.
+- The measurements are from one afternoon, one place (the maintainer's connection, to a database in western Europe) and an empty database. They are not a promise about other places or a full database.
 
 What one action costs, measured in the unit tests:
 

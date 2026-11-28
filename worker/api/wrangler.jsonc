@@ -48,8 +48,9 @@
         {
           "binding": "DB",
           "database_name": "blob-test",
-          // Filled in by the maintainer after `npx wrangler d1 create blob-test`.
-          "database_id": "REPLACE-WITH-THE-TEST-DATABASE-ID",
+          // Made with `npx wrangler d1 create blob-test` on 28 November 2026.
+          // An id is a name, not a key: it is no use without the account's sign-in.
+          "database_id": "9ddb23f7-8845-4442-809d-48da892fe82c",
           "migrations_dir": "migrations"
         }
       ],

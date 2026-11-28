@@ -91,6 +91,17 @@ export interface NewShare {
 
 /** Still shared at `?N`: no deadline, or the deadline has not arrived. */
 const alive = (table: string, nowParam: string) => `(${table}.expires_at IS NULL OR ${table}.expires_at > ${nowParam})`;
+/**
+ * Counter keys start with whose they are: `a:<account id>:` for a person's
+ * shares and replies, `i:<fingerprint>:` for sign-ins by one identity. That
+ * lets an account's counters be found by where their keys fall in order
+ * (from "a:<id>:" up to but not including "a:<id>;", the next character),
+ * without text-pattern matching. Cloudflare's database refuses a LIKE pattern
+ * longer than 50 characters, which a fingerprint is; found the hard way on the
+ * deployed test copy, so the test database now refuses LIKE altogether.
+ */
+const keysOf = (column: string, prefix: string) => `(${column} >= ${prefix} || ':' AND ${column} < ${prefix} || ';')`;
+
 /** How far a counter has got. A missing row means zero. */
 const counted = (keyParam: string) => `(SELECT COALESCE(SUM(count), 0) FROM counters WHERE key = ${keyParam})`;
 
@@ -109,7 +120,7 @@ export class ApiStore {
     const accountId = randomToken(16);
     const token = randomToken(32);
     const tokenHash = await sha256(token);
-    const limitKey = `signin:${identity.fingerprint}:${Math.floor(now / HOUR)}`;
+    const limitKey = `i:${identity.fingerprint}:${Math.floor(now / HOUR)}`;
     const results = await this.db.batch<Account>([
       this.db
         .prepare('INSERT INTO accounts (id, name, created_at) SELECT ?1, ?2, ?3 WHERE NOT EXISTS (SELECT 1 FROM identities WHERE fingerprint = ?4)')
@@ -162,8 +173,8 @@ export class ApiStore {
     await this.db.batch([
       this.db
         .prepare(
-          `DELETE FROM counters WHERE key LIKE '%:' || ?1 || ':%'
-             OR EXISTS (SELECT 1 FROM identities i WHERE i.account_id = ?1 AND counters.key LIKE 'signin:' || i.fingerprint || ':%')`,
+          `DELETE FROM counters WHERE ${keysOf('key', "'a:' || ?1")}
+             OR EXISTS (SELECT 1 FROM identities i WHERE i.account_id = ?1 AND ${keysOf('counters.key', "'i:' || i.fingerprint")})`,
         )
         .bind(accountId),
       this.db.prepare('DELETE FROM accounts WHERE id = ?1').bind(accountId),
@@ -178,7 +189,7 @@ export class ApiStore {
    */
   async createShare(ownerId: string, share: NewShare, now: number): Promise<ShareSummary | Failure> {
     const code = randomToken(18);
-    const limitKey = `share:d:${ownerId}:${Math.floor(now / DAY)}`;
+    const limitKey = `a:${ownerId}:s:${Math.floor(now / DAY)}`;
     const results = await this.db.batch<{ id: string; code: string; owner_id: string; expires_at: number | null; created_at: number }>([
       this.db
         .prepare(
@@ -281,8 +292,8 @@ export class ApiStore {
     message: { id: string; body: string; replyTo: string | null },
     now: number,
   ): Promise<{ id: string; replyTo: string | null; createdAt: number } | Failure> {
-    const minuteKey = `reply:m:${authorId}:${Math.floor(now / MINUTE)}`;
-    const dayKey = `reply:d:${authorId}:${Math.floor(now / DAY)}`;
+    const minuteKey = `a:${authorId}:rm:${Math.floor(now / MINUTE)}`;
+    const dayKey = `a:${authorId}:rd:${Math.floor(now / DAY)}`;
     const bump = (key: string, lifetime: number) =>
       this.db
         .prepare(

@@ -10,6 +10,7 @@ Read [docs/STATUS.md](docs/STATUS.md) first. It says what works, what was verifi
 npm install                 # also runs `wxt prepare`
 npm run check               # typecheck + unit tests + build + manifest check + worker config check
 npm run test:load -- --url http://127.0.0.1:8787   # 150-person load test against a running sharing server (see worker/api/README.md)
+npm run test:smoke -- --url http://127.0.0.1:8787  # every kind of request once, against a running sharing server; run after deploying the test copy
 npm run test:e2e            # browser tests, real extension (needs: npx playwright install chromium)
 npm run test:e2e:harness    # same tests, stand-in extension APIs; use if the real run cannot start
 npm run dev                 # WXT live-reload mode; not yet tried here
@@ -39,7 +40,7 @@ Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Keep these separate:
 | Site access | `lib/sites.ts`, `entrypoints/background.ts`, `entrypoints/popup/` | `activeTab` is temporary; lasting access is an optional per-site permission. |
 | Overlay UI | `overlay/`, `entrypoints/overlay.ts` | Lives in a Shadow Root. Sizes in px, not rem. Everything added to a page is removed on unmount. |
 | Shared input checks | `lib/input.ts` | Used by both the extension and the sharing server. No browser, storage or network code. |
-| Sharing server | `worker/api/` | Access rules live in the database statements in `src/store.ts`, each action one batch. Every input is checked again in `src/validate.ts`. The test-only sign-in must stay impossible on the real service; `npm run check:worker` enforces the configuration. Keep the 150-person load test passing (`npm test`). |
+| Sharing server | `worker/api/` | Access rules live in the database statements in `src/store.ts`, each action one batch. Every input is checked again in `src/validate.ts`. The test-only sign-in must stay impossible on the real service; `npm run check:worker` enforces the configuration. Keep the 150-person load test passing (`npm test`). No `LIKE` or `GLOB` in statements: Cloudflare's database refuses long patterns. |
 
 The overlay script is not a manifest content script. It is injected on a toolbar click or registered at runtime for granted sites. Do not add `content_scripts`, `host_permissions` or `web_accessible_resources`; `npm run check:manifest` fails if they appear.
 

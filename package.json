@@ -20,6 +20,7 @@
     "check:manifest": "node scripts/check-manifest.mjs",
     "check:worker": "node scripts/check-worker.mjs",
     "test:load": "node scripts/load-test.ts",
+    "test:smoke": "node scripts/smoke-test.ts",
     "screenshots": "wxt build && node scripts/screenshots.mjs && node scripts/popup-screenshots.mjs"
   },
   "dependencies": {

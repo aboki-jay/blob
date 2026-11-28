@@ -371,6 +371,12 @@ describe('stopping, deleting and deadlines', () => {
     await server.call('POST', `/shares/${graces.code}/messages`, { token: ada, body: reply('Ada was here') });
     await server.call('POST', `/shares/${adas.code}/messages`, { token: grace, body: reply('Grace was here') });
 
+    // What the server knows Ada by, noted before she goes.
+    const adaId = (server.db.raw.prepare("SELECT id FROM accounts WHERE name = 'Ada'").get() as { id: string }).id;
+    const adaPrint = (server.db.raw.prepare('SELECT fingerprint FROM identities WHERE account_id = ?').get(adaId) as { fingerprint: string }).fingerprint;
+    const keys = () => (server.db.raw.prepare('SELECT key FROM counters').all() as { key: string }[]).map((row) => row.key);
+    expect(keys().filter((key) => key.includes(adaId) || key.includes(adaPrint))).toHaveLength(4); // her sign-in, share, and reply minute and day
+
     expect((await server.call('DELETE', '/me', { token: ada })).body.ok).toBe(true);
     expect((await server.call('GET', '/me', { token: ada })).status).toBe(401);
     expect((await server.call('GET', `/shares/${adas.code}`, { token: grace })).status).toBe(410);
@@ -385,9 +391,9 @@ describe('stopping, deleting and deadlines', () => {
       shares: 1,
       messages: 1,
     });
-    // No counter still names the deleted account.
-    const adaCounters = server.db.raw.prepare("SELECT COUNT(*) AS n FROM counters WHERE key LIKE 'reply:%' OR key LIKE 'share:%'").get() as { n: number };
-    expect(adaCounters.n).toBe(3); // Grace's: one share, and her reply's minute and day
+    // No counter still names the deleted account or its sign-in fingerprint. Grace's are all still there.
+    expect(keys().filter((key) => key.includes(adaId) || key.includes(adaPrint))).toEqual([]);
+    expect(keys()).toHaveLength(4);
   });
 });
 
