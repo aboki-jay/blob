@@ -6,6 +6,8 @@ Milestone 1 implements local guest comments. On 28 November 2026 the maintainer 
 
 ## Approved design review
 
+The [email templates](email/README.md) cover the planned sign-in code, the maintainer's existing plain-text feedback notification and a proposed receipt for the person who submitted feedback. The current form confirms delivery inside Blob and collects no email address.
+
 Bottom navigation, 28 November. The compact guest bar measures 319 × 48 px. Its three tool slots are each 40 × 32 px. Activating the gray guest avatar reveals the disabled Sign in control in a 395 × 48 px bar. Escape closes that control and returns focus to the avatar. The expanded tools show the Inbox label. The two guest frames show the visual states. Opening the second state by click or keyboard is an implementation choice. [Approved guest frames](https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=271-6442)
 
 Compared the production overlay in Chromium with the approved [compact](screenshots/22-guest-navigation.png) and [avatar-open](screenshots/23-guest-navigation-profile.png) appearances. Two focused real-extension browser tests passed, covering both frame sizes, keyboard use, hover labels and the 360 px layout. `npm run check` passed with 79 unit tests, the production build and the manifest check. The next section in page order is Comment tags.
@@ -133,6 +135,10 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 
 ## Decisions pending
 
+On 28 November the maintainer approved per-link expiry for Milestone 2. The default is **Until I stop sharing**, with **7 days**, **14 days** and **30 days** as options (14 days was added later the same day). Expiry has the same effect as Stop sharing. Sharing again always creates a fresh link. Previous links and their saved entries stay closed.
+
+Milestone 2 History, distribution and the shared-link address were settled on 28 November. Owners see a Shared label under the website. Recipients can explicitly save a conversation to Saved shared threads. Links use `https://blob.davidokunlola.com/t/<random-code>` and open the web conversation by default. The extension ZIP is for testers ahead of the store release. [Milestone 2 draft](MILESTONE-2.md)
+
 - **Copyright line.** LICENSE says "Blob contributors". A named holder may be preferable.
 - **Mascot licence.** The mascot artwork is in the repository as part of the extension. Whether it is covered by MIT or reserved should be stated in THIRD_PARTY.md.
 - The drawer header follows the Approved for Implementation page.
@@ -143,7 +149,7 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 Milestone 1 is accepted by the maintainer. Close it out, then begin Milestone 2. Do not write Milestone 2 code before step 2 is settled.
 
 1. Merge the Milestone 1 pull request. CI is green on `c452833` (run 10, 28 November 2026), read from the log: stand-in run 30 passed and 1 skipped, real-extension run 25 passed and 6 skipped, no retries. Merging is the maintainer's decision; do not merge without being asked.
-2. Settle the open items under "Still to confirm" in [MILESTONE-2.md](MILESTONE-2.md), and have the maintainer create the Google sign-in client and the D1 database it lists.
+2. The open items in [MILESTONE-2.md](MILESTONE-2.md) were all settled with the maintainer by 28 November 2026; its "Still to confirm" list is empty. What remains before step 3 is for the maintainer to create the Google sign-in client and the D1 database it lists. (The Resend account is only needed for the last step.)
 3. Start Milestone 2 on a fresh branch from `main`, at step 1 of its "Order of work": the server and database with the access rules and their tests, and no interface. Update AGENTS.md's scope section at that point, because it still says Milestone 1 has no backend beyond the feedback relay.
 
 Earlier notes, kept for the record:
