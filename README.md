@@ -1,43 +1,88 @@
 # Blob
 
-Blob is an open-source Chrome extension for leaving persistent, Figma-style comments on elements of any website.
+Blob is an open-source Chrome extension for leaving persistent, Figma-style comments on parts of any website.
 
-> **Status: pre-alpha.** This repository currently contains the project plan and documentation only. No extension code has been written yet. See [docs/STATUS.md](docs/STATUS.md).
+> **Status: local alpha.** You can pin a comment to an element on a real page, save it privately on your device, and find it again after a refresh. There are no accounts, sharing or rooms yet. See [docs/STATUS.md](docs/STATUS.md) for what has and has not been verified.
 
-## What Blob will do
+![A new comment pinned to a button](docs/screenshots/05-new-comment.png)
 
-A draggable Blob button sits on a supported page. Clicking it opens an on-page drawer where you can pin a comment to an element, reply, resolve and reopen conversations, and find them again later.
-
-The first milestone is a local guest experience: comments are saved privately on your device, with no account, backend, or AI service. Sharing, private rooms, and real-time collaboration come later.
-
-## Planned functionality
-
-| Milestone | Summary |
+| Conversation | History |
 | --- | --- |
-| 1. Local guest experience | Place a comment on a real page, save it on the device, find it again after a refresh. |
-| 2. Shared threads | Accounts, explicit sharing of a selected thread, revocable links. |
-| 3. Private rooms | Invitations, membership, discussions spanning several websites. |
-| 4. Real-time collaboration | Live updates and presence. |
-| 5. Public release | Store packaging, privacy documentation, contributor readiness. |
+| ![A conversation with a reply](docs/screenshots/07-conversation.png) | ![History grouped by website](docs/screenshots/09-history.png) |
 
-Details are in [docs/ROADMAP.md](docs/ROADMAP.md). The full specification for the first milestone is in [docs/MILESTONE-1.md](docs/MILESTONE-1.md).
+## What works today
 
-## Planned stack
+- A Blob tab docked to the edge of the page. It tucks away until your pointer comes near; click to open the drawer, drag to move it along the edge or to the other side.
+- **Add a Blob**: choose any element, write a comment, and a numbered pin appears on it.
+- Comments and replies are saved on your device and survive reloads and browser restarts.
+- Resolve, reopen and delete conversations (delete asks first).
+- **Activity** for the current website, with the current page kept separate from other pages.
+- **History** grouped by website, then page, plus a Resolved view.
+- Pins follow their element when the page scrolls or changes. If the element disappears, the conversation is kept, marked "Location unavailable", and can be reattached to a new element.
+- Blob runs on a page only after you click its toolbar button, or on websites where you chose "Always show".
 
-- Chrome Manifest V3
-- [WXT](https://wxt.dev), React, and TypeScript
-- `chrome.storage.local` behind a small typed storage layer
-- An injected overlay isolated in a Shadow Root
+Not built yet: accounts, sharing, private rooms, real-time collaboration. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
-These are starting choices, described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). They become commitments once the first code lands.
+## Try it
 
-## Running it
+You need [Node.js](https://nodejs.org) 22.18 or newer and Google Chrome.
 
-There is nothing to run yet. Setup, build, and "load unpacked" instructions will be added here with the first working code.
+```bash
+npm install
+npm run build
+```
 
-## Privacy
+Then load it into Chrome:
 
-Blob is designed to keep guest comments on the device and to request the minimum Chrome permissions. See [docs/PRIVACY.md](docs/PRIVACY.md).
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and choose the `.output/chrome-mv3` folder inside this project.
+4. Pin Blob to the toolbar (puzzle-piece icon, then the pin next to Blob).
+5. Open any ordinary website and click the Blob toolbar button. The first time, choose **Continue as a Guest**. Then click **Use Blob on this page**.
+
+No accounts, API keys or servers are needed.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | WXT's live-reloading development mode (not yet tried on this project). |
+| `npm run build` | Production build into `.output/chrome-mv3`. |
+| `npm run typecheck` | TypeScript check. |
+| `npm test` | Unit tests (storage, page identity, anchoring, requests). |
+| `npm run check:manifest` | Confirms the built extension asks only for the expected permissions. |
+| `npm run check` | All four of the above, in order. |
+| `npm run test:e2e` | Browser tests against the real built extension. Needs `npx playwright install chromium` once. |
+| `npm run test:e2e:harness` | The same browser tests with stand-in extension APIs, for machines where the above cannot start. |
+| `npm run screenshots` | Regenerates `docs/screenshots`. |
+| `npm run zip` | Packages the build as a zip. |
+
+## Privacy in one paragraph
+
+Your comments stay in this browser, inside the extension's own storage. Your comments are never sent anywhere. Blob contacts the outside world in two cases only: it fetches the icon of the website you are on, and if you press Submit on the feedback form it sends that feedback to the Blob project. Blob does not read passwords, form fields or anything you type into a page, and it keeps no browsing history beyond the pages you commented on. Details: [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Limitations
+
+- Top-level HTML pages only. Not supported: content inside embedded frames, closed shadow roots, canvas-drawn apps, PDFs, local files, and browser pages such as `chrome://` or the Chrome Web Store.
+- Comments are local. They are not backed up, and removing Blob or clearing its data deletes them.
+- Without "Always show", Blob leaves when you reload or navigate, until you click the toolbar button again.
+
+## Project layout
+
+```
+entrypoints/   background service worker, toolbar popup, and the on-page overlay entry
+overlay/       the on-page UI (React, inside a Shadow Root)
+lib/           storage, page identity, anchoring, messages, site access (no UI)
+tests/         unit tests, browser tests and fixture pages
+worker/        the optional feedback relay (a Cloudflare Worker)
+docs/          architecture, privacy, roadmap, status
+```
+
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Contact
+
+Questions and feedback: [blob@davidokunlola.com](mailto:blob@davidokunlola.com).
 
 ## Contributing
 
@@ -45,4 +90,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Coding agents should read [AGENTS.md](AG
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](LICENSE). Bundled fonts and icons have their own licences: see [THIRD_PARTY.md](THIRD_PARTY.md).

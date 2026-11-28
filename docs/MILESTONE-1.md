@@ -1,6 +1,6 @@
 # Milestone 1: A working local guest experience
 
-This is the specification for the first milestone. It is not yet implemented.
+This is the specification for the first milestone. It has been implemented; see [STATUS.md](STATUS.md) for what was verified and what was not.
 
 ## Done when
 

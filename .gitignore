@@ -35,3 +35,6 @@ web-ext.config.ts
 .DS_Store
 Thumbs.db
 *.log
+
+# Playwright
+/blob-report/

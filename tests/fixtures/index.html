@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Studio — Example website</title>
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
+    <nav><a href="/">Home</a><a href="/pricing.html">Pricing</a><a href="/spa">App</a></nav>
+    <main>
+      <h1>A thoughtful home for your next idea.</h1>
+      <p id="intro">We help people turn a promising thought into something useful.</p>
+      <button id="hero" onclick="window.heroClicks = (window.heroClicks || 0) + 1; document.title = 'CLICKED'">Explore our work</button>
+
+      <div class="cards">
+        <section class="card"><h2>Clear structure</h2><p>Find a place for every idea.</p><a href="/structure">Learn more</a></section>
+        <section class="card"><h2>Room to create</h2><p>Explore and share feedback.</p><a href="/create">Learn more</a></section>
+        <section class="card"><h2>A shared perspective</h2><p>Talk about the work.</p><a href="/shared">Learn more</a></section>
+      </div>
+
+      <form onsubmit="return false">
+        <label>Email <input name="email" type="email" value="person@example.com" /></label>
+        <label>Password <input id="password" name="password" type="password" value="hunter2-do-not-store" /></label>
+        <textarea name="notes">private notes do-not-store</textarea>
+      </form>
+
+      <div class="tall"></div>
+      <p id="far">Far down the page.</p>
+    </main>
+  </body>
+</html>
