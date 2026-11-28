@@ -2,7 +2,7 @@
 
 Last updated: 28 November 2026
 
-Milestone 1 implements local guest comments. The production build and browser harness have been exercised locally. The next design check is a walkthrough of the unpacked extension in Chrome, including the toolbar and permission prompt.
+Milestone 1 implements local guest comments. On 28 November 2026 the maintainer reported that Milestone 1 had been checked in Chrome and accepted it. Which steps of the manual walkthrough were covered was not written down, so the "Not verified" list below is left as it was. The pull request is not merged yet. Milestone 2 is planned, not started.
 
 ## Approved design review
 
@@ -80,7 +80,7 @@ Verification for these changes: `npm run check` passed (78 unit tests, productio
 
 ## Manual walkthrough (about ten minutes)
 
-The maintainer chose to do this before merging Milestone 1 (27 November 2026). The steps were rewritten that day to match the current design; they have not been run.
+The maintainer chose to do this before merging Milestone 1 (27 November 2026), and reported on 28 November that Milestone 1 had been checked and was good to go. The steps were rewritten on the 27th to match the design as it was then. They do not yet mention reactions, the saved appearance or the rebuilt bottom navigation.
 
 1. `npm install`, then `npm run build`.
 2. In Chrome open `chrome://extensions`, turn on Developer mode, click **Load unpacked**, choose `.output/chrome-mv3`. Pin Blob to the toolbar.
@@ -136,11 +136,17 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 - **Copyright line.** LICENSE says "Blob contributors". A named holder may be preferable.
 - **Mascot licence.** The mascot artwork is in the repository as part of the extension. Whether it is covered by MIT or reserved should be stated in THIRD_PARTY.md.
 - The drawer header follows the Approved for Implementation page.
-- **Milestone 2.** The maintainer confirmed the sharing rule (sign-in needed to view and to reply), Google sign-in, and Cloudflare for the server on 27 November 2026. A draft specification is in [MILESTONE-2.md](MILESTONE-2.md); its "Still to confirm" list needs answers. Nothing in it is built, and building waits for the walkthrough below and the merge of the Milestone 1 pull request.
+- **Milestone 2.** The maintainer confirmed the sharing rule (sign-in needed to view and to reply), Google sign-in, and Cloudflare for the server on 27 November 2026. A draft specification is in [MILESTONE-2.md](MILESTONE-2.md); its "Still to confirm" list needs answers. Nothing in it is built. The maintainer accepted Milestone 1 on 28 November 2026; building now waits only for the merge of the Milestone 1 pull request and the open items in that list.
 
 ## Exact next task
 
-Review and verify Milestone 1 in a real browser. Do not start accounts, sharing or rooms.
+Milestone 1 is accepted by the maintainer. Close it out, then begin Milestone 2. Do not write Milestone 2 code before step 2 is settled.
+
+1. Merge the Milestone 1 pull request. CI is green on `c452833` (run 10, 28 November 2026), read from the log: stand-in run 30 passed and 1 skipped, real-extension run 25 passed and 6 skipped, no retries. Merging is the maintainer's decision; do not merge without being asked.
+2. Settle the open items under "Still to confirm" in [MILESTONE-2.md](MILESTONE-2.md), and have the maintainer create the Google sign-in client and the D1 database it lists.
+3. Start Milestone 2 on a fresh branch from `main`, at step 1 of its "Order of work": the server and database with the access rules and their tests, and no interface. Update AGENTS.md's scope section at that point, because it still says Milestone 1 has no backend beyond the feedback relay.
+
+Earlier notes, kept for the record:
 
 1. Reload the unpacked production build and compare all six guest sections against the Approved for Implementation page. Check the 600 × 800 drawer, the 450 px comment tag, the feedback hover label and page disclosures at 100% zoom, then repeat at a narrow width. Record differences before changing launcher interactions.
 2. CI is green again on `74030a1` (run 8, 27 November 2026), read from the log: the stand-in run passed 24 with 1 skipped, and the real-extension run passed 20 with 5 skipped (tests that need the stand-ins). No test needed a retry. This is the first real-extension pass that includes the popup welcome, reactions, the close effect and scrolling while choosing. Run 9 on `dbf3728` (28 November 2026: motion, keyboard use of the card, feedback drafts) is also green, read from the log: stand-in run 27 passed and 1 skipped, real-extension run 22 passed and 6 skipped, no retries.
