@@ -1,6 +1,6 @@
 # Milestone 2: Shared threads
 
-**Draft for the maintainer to review. Nothing here is built.** Building starts after Milestone 1 has had its Chrome walkthrough and its pull request is merged; see [STATUS.md](STATUS.md).
+**In progress.** Step 1 of the order of work (the server, its rules and the load test) is built and tested; it is not deployed, and the extension does not use it yet. Steps 2 to 7 are not built. See [STATUS.md](STATUS.md) for what was verified and how.
 
 Use `grill-me` and its companion `grilling` for the remaining milestone decisions. For each flow, walk through the expected outcome and what happens when access changes, an operation fails or someone retries it. Discuss the trade-offs with the maintainer before recording a decision or implementing it.
 
@@ -56,9 +56,22 @@ The [sign-in email template](email/README.md#sign-in-code) includes the subject,
 
 - **Email service: Resend's free tier.** Read on 28 November 2026: 3,000 emails a month, 100 a day, and 30 days of log retention. Nothing is paid for. The cost is that Resend is given each address a code is sent to and keeps its logs for that long; PRIVACY.md must say so. The alternative considered was Cloudflare's paid plan (5 dollars a month, 3,000 emails included, log retention not published). Recheck the limits when step 7 starts.
 - **When a code cannot be sent.** If the daily limit is reached or the service is down, Blob says "We couldn't send your code. Try again later, or sign in with Google." It never says a code was sent when it was not.
-- **Rules for a code.** A code lasts 10 minutes and stops working after 5 wrong tries. Asking for a new one replaces the old one. At most one request a minute per address.
+- **Rules for a code.** A code lasts 10 minutes and stops working after 5 wrong tries. A successful replacement send invalidates the old code. A failed send leaves the previous code valid for its remaining time and attempts. At most one request a minute per address.
 - **What the email says.** The code, how long it lasts, and one friendly line inviting feedback at blob@davidokunlola.com. Nothing about any conversation, page or person, because the email passes through another company. (Maintainer's decision, 28 November 2026.) No "buy me a coffee" or other payment line: the maintainer raised one and decided against it for this email, because a sign-in email with a payment link reads like a scam and teaches people to click links in sign-in emails. If a donation page is ever made, it belongs in the About section and the README.
 - The maintainer creates the Resend account and its sending key. The key is a Worker secret, typed in by the maintainer and never written into the repository.
+
+### Sign-in screens and recovery (28 November 2026)
+
+1. **Choose a method.** Toolbar sign-in happens in the Blob popup. A recipient following a shared link signs in on the Blob web page. Once both methods are available, the first screen offers **Continue with Google**, an email address field and **Email me a code**. Show **Enter your code** only after the send succeeds.
+2. **Return after sign-in.** From the toolbar, show the signed-in popup. From a shared link, return to the conversation after checking access. If the owner started from **Share**, reopen the Share dialog and wait for explicit confirmation before uploading anything.
+
+| What happens | What the person sees |
+| --- | --- |
+| Close the popup to check email, then reopen it | Resume **Enter your code** with the masked address and an empty code field. Keep the original deadline. Reopening sends no email. After expiry, show **Your code has expired** and **Send a new code**. |
+| Choose **Change email** | Prefill the address for editing. **Back** returns to the pending verification. If sending to the edited address fails, keep the edit and allow retry. The original code remains valid for the original address until it expires or is replaced. |
+| Sending to a changed address succeeds | Switch this sign-in to the corrected address and invalidate its previous code. A code for one address can never verify a different address. |
+| **Resend code** succeeds | Clear any entered digits and show **New code sent. Use the most recent code.** If the person enters the old code, keep the field available while attempts remain and show **That code didn’t work. Check that you’re using the most recent one.** An incorrect entry never sends another email automatically. |
+| **Resend code** fails | Explain the send failure on the verification screen. The previously issued code retains its original deadline and remaining attempts. |
 
 ## 2. Sharing a comment
 
@@ -96,6 +109,61 @@ The [sign-in email template](email/README.md#sign-in-code) includes the subject,
 - Firm limits on sign-ins, shares and replies per person, counted in the database. Cloudflare's built-in limiter proved too loose to rely on (see the feedback relay notes in STATUS.md).
 - Links are long random values that cannot be guessed, and are not the conversation's internal id.
 
+## Capacity
+
+**Requirement (maintainer, 28 November 2026): from the start, the server is stress-tested to show it can serve about 150 people at the same time without failing.** The load test is built in step 1, alongside the server, not added at the end.
+
+What the test can and cannot show:
+
+- **On a developer's machine and in CI**, the server runs locally. A test with 150 simulated people shows that Blob's own code is correct and frugal under load: no lost or doubled replies, no request that needs more work than the limits allow. It says nothing about Cloudflare's capacity.
+- **Against a deployed copy on Cloudflare**, the same test shows real behaviour: response times and whether anything is refused. This needs the maintainer's database and a separate test deployment, never the real one with people's conversations in it.
+
+Cloudflare's free-plan limits that matter, read from its documentation on 28 November 2026:
+
+| Limit | Free plan | What it means for Blob |
+| --- | --- | --- |
+| Requests | 100,000 a day; no limit per second | 150 people at once is not a problem in itself. The daily total is the ceiling. |
+| Work per request | 10 ms of processor time | Each request must stay light. Slow password-style scrambling is ruled out for fingerprints. |
+| Database queries per request | 50 | Each request should need only a handful. |
+| Database | Answers one query at a time; queues the rest, then refuses when the queue is full | Fast queries are what keep 150 people moving. A 1 ms query allows about 1,000 a second. |
+| Rows written | 100,000 a day | A reply is a few rows. Fine at this scale, but it is a ceiling. |
+| Rows read | 5 million a day | Lists must be read with indexes, not by scanning. |
+
+When a daily limit is reached, Cloudflare refuses requests until midnight UTC. Blob must then say it is busy and lose nothing, as it does for a failed save today.
+
+### Load test decisions (28 November 2026)
+
+- **What "150 people at the same time" means.** First a rush: 150 signed-in people each open a shared conversation within the same ten seconds, and one in five replies. Then steady use: all 150 keep reading and replying, one action each every ten seconds, for two minutes. That is about 2,000 requests, a small part of a day's allowance.
+- **Pass marks.** No request fails. No reply is lost or doubled. On Cloudflare, 95 in 100 responses arrive within one second. Local timings are reported but not judged, because a developer's machine is not Cloudflare.
+- **Where it runs.** A small version on every change, locally and in CI. The full 150-person version against a separate test copy on Cloudflare before release, never against the real one. The full version is not run on every change, because it would use up the daily allowance.
+- **The daily ceiling.** Accepted for now, to keep to free infrastructure. The plan records how many active people a day the free allowance supports once the server's real cost per action is measured. When the ceiling is reached, Blob says it is busy and to try again later, and loses nothing. Cloudflare's paid plan (5 dollars a month) removes the request ceiling if it is ever needed; that would be a new decision.
+- Signing in for the test uses test accounts through a sign-in that exists only on the local server and the test copy. It must be impossible to switch on in the real deployment.
+
+### Load test results so far (28 November 2026)
+
+The agreed scenario: 150 people, about 2,200 requests, about 620 replies of which one in ten is deliberately sent twice.
+
+| Where it ran | Result |
+| --- | --- |
+| In the unit tests, against the server's code with a stand-in database | Passed. No request failed; no reply lost or doubled. |
+| On the development machine, against the server running on Cloudflare's own runtime and database engine (`wrangler dev`), every wave of 150 fired at the same instant | Passed, the same. Responses took 1.5 to 2.3 seconds, which is that machine working through 150 requests at once, not a measure of Cloudflare. |
+| The same, with actions spread over two real minutes as people's would be | Passed, the same. Half of reads within 19 ms and 95 in 100 within 91 ms; replies 26 ms and 66 ms. A few took over two seconds while the machine was also running other tests. |
+| Against a test copy on Cloudflare | **Not run.** It needs the maintainer to create the test database and deploy the test copy (see `worker/api/README.md`). Until then nothing is known about real response times, and the one-second pass mark is unjudged. |
+
+What one action costs, measured in the unit tests:
+
+| Action | Database statements (free plan allows 50) | Rows written |
+| --- | --- | --- |
+| Opening a conversation | 3 | 0 |
+| Replying | 6 | up to 3 (the reply and two counters) |
+
+What the free plan's daily allowance supports, from those figures:
+
+- 100,000 requests a day is the first ceiling. At 100 requests per person per day, that is about 1,000 active people a day. The whole 150-person scenario uses about 2% of a day.
+- 100,000 rows written a day allows about 33,000 replies a day.
+
+These are arithmetic from measured costs, not a test of Cloudflare.
+
 ## Chrome and privacy requirements
 
 - One new permission: `identity`, for Google sign-in. Still no `host_permissions`, `content_scripts` or `web_accessible_resources`. The manifest check is updated on purpose, not loosened.
@@ -121,7 +189,7 @@ All are free and done once; step-by-step instructions will be written when they 
 
 Small steps, each reviewable on its own:
 
-1. Server and database with the access rules and their tests. No interface yet.
+1. Server and database with the access rules and their tests, and the 150-person load test (see "Capacity"). No interface yet. **Built 28 November 2026**, in `worker/api/`. Not deployed.
 2. Sign in and sign out in the extension.
 3. Share a comment, choose its expiry, copy the link and stop sharing.
 4. The web page for recipients: sign in, read, reply.
@@ -134,6 +202,8 @@ Small steps, each reviewable on its own:
 Nothing is open as of 28 November 2026. Every question raised so far has a decision recorded above.
 
 ## Verification
+
+For email sign-in, close and reopen the popup before and after expiry. Exercise Back, failed and successful sends for both address changes and resends, and verification with a replaced code. Check the address binding, deadline and number of emails sent. Verify each post-sign-in destination, including that returning to Share leaves the thread local until the owner confirms.
 
 Use a controlled clock to check all four expiry choices. For timed links, check access just before and at the deadline, including a saved entry and a reply submitted from an already-open tab. Verify that visits leave the deadline unchanged and that expiry removes the server copy and replies while preserving the owner's local copy.
 

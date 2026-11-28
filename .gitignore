@@ -38,3 +38,7 @@ Thumbs.db
 
 # Playwright
 /blob-report/
+
+# Cloudflare Wrangler local state (local databases, caches)
+.wrangler/
+.dev.vars

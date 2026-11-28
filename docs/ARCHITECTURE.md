@@ -1,6 +1,8 @@
 # Architecture
 
-How Blob is put together as of Milestone 1 (local guest experience). One extension project: Chrome Manifest V3, built with WXT, React and TypeScript. No backend.
+How Blob is put together. The extension is one project: Chrome Manifest V3, built with WXT, React and TypeScript. As released it has no backend: everything below up to "Sharing server" describes the local guest experience from Milestone 1.
+
+Milestone 2 adds a sharing server. Its first step is built and described under "Sharing server" at the end; the extension does not use it yet.
 
 ## The parts
 
@@ -99,6 +101,24 @@ The only server-side piece, and the only request Blob makes with someone's words
 - No host permission is needed: the Worker allows requests from any origin, and no cookies or credentials are sent.
 - With `FEEDBACK_ENDPOINT` empty, the background reports feedback as unavailable, Submit stays off, and the form offers an email link.
 - Browser tests use a stand-in relay on the fixture server, so no test sends real feedback.
+
+## Sharing server
+
+Milestone 2, step 1. In `worker/api/`: a Cloudflare Worker with a D1 database (which is SQLite). **Built and tested, not deployed, and not yet used by the extension.** Its requests are listed in [worker/api/README.md](../worker/api/README.md); the decisions behind it are in [MILESTONE-2.md](MILESTONE-2.md).
+
+- **Who someone is.** A session secret sent with each request. The database holds only a scramble of it, and a keyed scramble of the sign-in identity (Google's account number, later an email address), never the identity itself. Google sign-in is the next step; until then accounts exist only through a test-only sign-in that the real service cannot have.
+- **Where the rules are.** In the database statements themselves (`src/store.ts`). Each action is one batch, which D1 runs as a single all-or-nothing step with nothing else in between. A reply is checked and written in the same step: is the conversation still shared, is it before the deadline, is this person within their limits, is there room. So the rules hold however many people act at the same moment, and there is no gap between checking and writing for anything to slip through.
+- **Retries.** As on the device, ids for conversations and comments are made by the client and reused on retry, so repeating a request cannot repeat its effect.
+- **Links.** A long random code, not the conversation's id. An ended, expired, mistyped or invented link all get the same answer.
+- **Deadlines.** Checked on every read and reply. A timer then deletes what has run out, replies included.
+- **Limits.** Per person, counted in the database, because Cloudflare's built-in limiter proved too loose (see the feedback relay).
+- **Input.** Checked again on arrival with the code the extension uses (`lib/input.ts`, `lib/page.ts`), so a page address is sanitised on the server even if a client skipped it. Stored as plain text.
+- **Failure.** If the database cannot answer, the server says "busy" and nothing more.
+
+How it is tested:
+
+- The rules run against the real request handler and the real statements, with a stand-in database built on the SQLite in Node (`tests/unit/d1.ts`), which copies D1's all-or-nothing batches.
+- The 150-person load test (`tests/load/scenario.ts`) runs the scenario the maintainer agreed. In the unit tests it checks nothing is lost or doubled and that no request needs more database work than the free plan allows. The same scenario can be pointed at a running server. A separate test breaks the server on purpose to prove the load test notices.
 
 ## Not supported
 

@@ -49,9 +49,9 @@ No accounts, API keys or servers are needed.
 | `npm run dev` | WXT's live-reloading development mode (not yet tried on this project). |
 | `npm run build` | Production build into `.output/chrome-mv3`. |
 | `npm run typecheck` | TypeScript check. |
-| `npm test` | Unit tests (storage, page identity, anchoring, requests). |
+| `npm test` | Unit tests (storage, page identity, anchoring, requests, and the sharing server with its 150-person load test). |
 | `npm run check:manifest` | Confirms the built extension asks only for the expected permissions. |
-| `npm run check` | All four of the above, in order. |
+| `npm run check` | All four of the above, in order, plus a check of the sharing server's configuration. |
 | `npm run test:e2e` | Browser tests against the real built extension. Needs `npx playwright install chromium` once. |
 | `npm run test:e2e:harness` | The same browser tests with stand-in extension APIs, for machines where the above cannot start. |
 | `npm run screenshots` | Regenerates `docs/screenshots`. |
@@ -73,8 +73,9 @@ Your comments stay in this browser, inside the extension's own storage. Your com
 entrypoints/   background service worker, toolbar popup, and the on-page overlay entry
 overlay/       the on-page UI (React, inside a Shadow Root)
 lib/           storage, page identity, anchoring, messages, site access (no UI)
-tests/         unit tests, browser tests and fixture pages
-worker/        the optional feedback relay (a Cloudflare Worker)
+tests/         unit tests, browser tests, the load test and fixture pages
+worker/        Cloudflare Workers: the optional feedback relay, and the sharing server for
+               Milestone 2 (built and tested, not deployed, not yet used by the extension)
 docs/          architecture, privacy, roadmap, status
 ```
 
