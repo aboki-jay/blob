@@ -41,10 +41,12 @@
   touch-action: none;
   user-select: none;
   transform: translateX(var(--tuck));
+  /* Tucking away is quicker than coming out: it is the system tidying up, not
+     asking for attention. Where it starts from when it first appears is in
+     motion.css. */
   transition:
-    transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.12s ease;
-  animation: tab-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+    transform 170ms var(--ease-out),
+    box-shadow 120ms ease;
 }
 
 .blob.edge-tab--left {
@@ -52,15 +54,29 @@
   border-left: 0;
   border-radius: 0 var(--tab-radius) var(--tab-radius) 0;
   transform: translateX(calc(var(--tuck) * -1));
-  animation-name: tab-in-left;
 }
 
 /* Out: the pointer is near, it has focus, it just arrived, or it is being dragged. */
 .blob.edge-tab--out,
-.blob.edge-tab:hover,
 .blob.edge-tab:focus-visible {
   transform: translateX(0);
   box-shadow: var(--shadow-e3);
+  transition-duration: 240ms, 120ms;
+}
+
+/* Only where there is a pointer that can hover: a tap on a touch screen would
+   leave it stuck out. */
+@media (hover: hover) and (pointer: fine) {
+  .blob.edge-tab:hover {
+    transform: translateX(0);
+    box-shadow: var(--shadow-e3);
+    transition-duration: 240ms, 120ms;
+  }
+}
+
+/* Reached with the keyboard: it is simply there. Keyboard actions do not animate. */
+.blob.edge-tab:focus-visible {
+  transition-duration: 0s, 120ms;
 }
 
 .blob.edge-tab--dragging {
@@ -96,41 +112,15 @@
   right: 4px;
 }
 
-@keyframes tab-in {
-  from {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes tab-in-left {
-  from {
-    transform: translateX(-100%);
-  }
-}
-
-/* The drawer opens on the tab's side and slides in from that edge. */
+/* The drawer opens on the tab's side and slides in from that edge. Where it
+   starts from is in motion.css. */
 .root .drawer {
-  animation: drawer-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
 }
 
 .root[data-side='left'] .drawer {
   left: 16px;
   right: auto;
-  animation-name: drawer-in-left;
-}
-
-@keyframes drawer-in {
-  from {
-    opacity: 0;
-    transform: translateX(32px);
-  }
-}
-
-@keyframes drawer-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(-32px);
-  }
 }
 
 /* What changes for people who ask for less motion is in motion.css. */

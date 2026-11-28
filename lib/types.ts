@@ -1,5 +1,5 @@
 /** Version of the stored data shape. Bump it and add a migration when the shape changes. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * The reactions a comment can be given. A fixed list, so nothing unexpected is
@@ -86,7 +86,12 @@ export interface BlobData {
   pages: Record<string, PageRecord>;
 }
 
+export const THEMES = ['Dark', 'Light', 'System'] as const;
+export type Theme = (typeof THEMES)[number];
+export const isTheme = (value: unknown): value is Theme => THEMES.some(theme => theme === value);
+
 export interface BlobSettings {
+  theme: Theme;
   /** True once the person has chosen "Continue as a Guest". */
   onboarded: boolean;
   /** Centre of the Blob button as fractions of the viewport. */
@@ -100,7 +105,7 @@ export type Drafts = Record<string, string>;
 export type EnabledSites = string[];
 
 export const emptyData = (): BlobData => ({ version: SCHEMA_VERSION, threads: {}, pages: {} });
-export const defaultSettings = (): BlobSettings => ({ onboarded: false, blobPosition: null });
+export const defaultSettings = (): BlobSettings => ({ onboarded: false, blobPosition: null, theme: 'Light' });
 
 export const LIMITS = {
   body: 5000,

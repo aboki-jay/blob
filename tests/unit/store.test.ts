@@ -195,7 +195,18 @@ describe('drafts and settings', () => {
   it('remembers where the Blob button was left, within the screen', async () => {
     const store = new BlobStore(new FakeArea());
     expect(await store.updateSettings({ blobPosition: { x: 4, y: -1 } })).toMatchObject({ blobPosition: { x: 1, y: 0 } });
-    expect(await store.updateSettings({ onboarded: true })).toEqual({ onboarded: true, blobPosition: { x: 1, y: 0 } });
+    expect(await store.updateSettings({ onboarded: true })).toEqual({ onboarded: true, blobPosition: { x: 1, y: 0 }, theme: 'Light' });
+  });
+
+  it('keeps existing guest settings when saving a theme for the first time', async () => {
+    const area = new FakeArea();
+    const previous = { onboarded: true, blobPosition: { x: 0.2, y: 0.7 } };
+    area.items[KEYS.settings] = previous;
+    const store = new BlobStore(area);
+    expect(await store.updateSettings({ theme: 'Dark' })).toEqual({ ...previous, theme: 'Dark' });
+    expect(await new BlobStore(area).updateSettings({ onboarded: false })).toEqual({
+      ...previous, onboarded: false, theme: 'Dark',
+    });
   });
 });
 

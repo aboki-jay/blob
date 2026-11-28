@@ -157,6 +157,8 @@ export function Popup() {
   const [sites, setSites] = useState<SiteGroup[]>([]);
   /** Whether the welcome screen has been answered. Unknown until storage is read. */
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  /** True when the welcome screen was answered just now, in this very popup. */
+  const [arrived, setArrived] = useState(false);
 
   useEffect(() => {
     void readStatus().then(setStatus, () => setStatus({ kind: 'unsupported' }));
@@ -181,7 +183,10 @@ export function Popup() {
       <Welcome
         onContinue={async () => {
           const reply = await ask({ type: 'settings/set', settings: { onboarded: true } });
-          if (reply.ok) setOnboarded(true);
+          if (reply.ok) {
+            setArrived(true);
+            setOnboarded(true);
+          }
           return reply.ok;
         }}
       />
@@ -242,7 +247,7 @@ export function Popup() {
   const recent = sites.slice(0, RECENT_LIMIT);
 
   return (
-    <main className="popup">
+    <main className={arrived ? 'popup popup--arrived' : 'popup'}>
       <section className="card">
         <div className="card__top">
           {ready ? (

@@ -36,10 +36,10 @@ Everything is in extension-owned `chrome.storage.local`, under four keys:
 | --- | --- |
 | `blob:data` | `{ version, threads, pages }`. A thread is one conversation: its page, pin number, status, anchor and messages (the first message is the comment, the rest are replies). A message can carry the guest's reactions, from a fixed list of six. |
 | `blob:drafts` | Unsent text, keyed by `new:<page>` or `reply:<thread>`. |
-| `blob:settings` | Whether the welcome screen was dismissed, and where the Blob button was left. |
+| `blob:settings` | Welcome screen dismissal, Blob position and drawer appearance (Light, Dark or System). |
 | `blob:sites` | Websites with lasting access, mirrored from Chrome. |
 
-- **Versioned.** `blob:data` carries a schema version, currently 2 (version 2 added reactions; version 1 data needs no change beyond the number). `migrate()` upgrades older data step by step. Data written by a *newer* Blob is never overwritten: the store refuses and the UI explains.
+- **Versioned.** `blob:data` carries schema version 3. Version 2 added reactions. Version 3 adds appearance to the separate settings record, with Light as the default for existing installs. `migrate()` upgrades older data step by step. Data written by a *newer* Blob is never overwritten: the store refuses and the UI explains.
 - **One writer.** The overlay and popup never write. They send a request; the background validates it and performs it.
 - **No lost updates.** The store runs writes one after another, each as read, change, write. Two tabs saving at once both succeed.
 - **Honest failures.** If a write fails, the request fails, and the UI keeps the text and offers Try again.

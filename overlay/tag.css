@@ -18,14 +18,9 @@
   color: var(--text);
   font-size: 14px;
   line-height: 20px;
-  animation: tag-in 0.16s ease-out backwards;
-}
-
-@keyframes tag-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+  /* It grows out of its element; where from is set in tag.tsx, and what it
+     starts as is in motion.css. */
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
 }
 
 .tag__header {
@@ -243,21 +238,9 @@
   box-shadow: var(--shadow-e3);
 }
 
-.tag-react__choices.is-above {
-  transform-origin: 18px 100%;
-  animation: reactions-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
-}
-
-.tag-react__choices.is-below {
-  transform-origin: 18px 0;
-  animation: reactions-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
-}
-
-@keyframes reactions-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
+/* It grows out of the smiley (set in tag.tsx); what it starts as is in motion.css. */
+.tag-react__choices {
+  transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
 }
 
 .tag-react__choices button {
@@ -268,12 +251,16 @@
   border-radius: 9999px;
   font-size: 20px;
   line-height: 1;
-  transition: transform 0.12s ease, background-color 0.12s ease;
+  transition: transform 120ms var(--ease-out), background-color 120ms ease;
 }
 
-.tag-react__choices button:hover {
-  background: var(--bg-fill3);
-  transform: scale(1.15);
+/* Only where there is a pointer that can hover: on a touch screen a tap would
+   leave the emoji stuck large. */
+@media (hover: hover) and (pointer: fine) {
+  .tag-react__choices button:hover {
+    background: var(--bg-fill3);
+    transform: scale(1.15);
+  }
 }
 
 /* The one already given is marked, as in the reference. */

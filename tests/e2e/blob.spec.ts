@@ -699,6 +699,20 @@ test('collapsed navigation: pointing at an item shows its name in a pill under t
   await page.getByRole('button', { name: 'Add a Blob' }).click();
   const nav = page.getByRole('navigation', { name: 'Comment tools' });
   const resolved = nav.getByRole('button', { name: 'Resolved conversations' });
+  const guest = nav.getByRole('button', { name: 'Guest profile' });
+  const signIn = nav.getByRole('button', { name: 'Sign in', exact: true });
+  const size = async () => {
+    const box = (await nav.boundingBox())!;
+    return [Math.round(box.width), Math.round(box.height)];
+  };
+  await expect.poll(size).toEqual([319, 48]);
+  await guest.focus();
+  await page.keyboard.press('Enter');
+  await expect(signIn).toBeDisabled();
+  await expect.poll(size).toEqual([395, 48]);
+  await page.keyboard.press('Escape');
+  await expect(signIn).toHaveCount(0);
+  await expect(guest).toBeFocused();
   const pill = resolved.locator('.nav-tip');
   await expect(pill).toBeHidden();
 
@@ -721,12 +735,15 @@ test('collapsed navigation: pointing at an item shows its name in a pill under t
   // Expanded, the names are written out, so there are no pills.
   await nav.getByRole('button', { name: 'Expand tools' }).click();
   await resolved.hover();
+  await expect(inbox).toHaveText('Inbox');
   await expect(nav.locator('.nav-tip')).toHaveCount(0);
 
   // Collapsed again, reaching an item with the keyboard shows its pill too.
   await nav.getByRole('button', { name: 'Collapse tools' }).click();
   await page.mouse.move(5, 5);
   await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(guest).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(resolved).toBeFocused();
   await expect(pill).toBeVisible();
@@ -812,15 +829,90 @@ test('motion: things fade out when closed, give when pressed, greet once, and ca
   await comment(page, '#hero', 'A calm comment');
   await pins(page).click();
   await expect(tag(page)).toBeVisible();
-  expect(await tag(page).evaluate((el) => getComputedStyle(el).animationName)).toBe('fade-in');
-  expect(await tab.evaluate((el) => getComputedStyle(el).transitionProperty)).not.toContain('transform');
+  const moves = (target: ReturnType<typeof tag>) => target.evaluate((el) => getComputedStyle(el).transitionProperty);
+  // The card and the drawer fade in and out but do not slide or grow; the tab does not slide.
+  expect(await moves(tag(page))).toContain('opacity');
+  expect(await moves(tag(page))).not.toContain('transform');
+  expect(await moves(tab)).not.toContain('transform');
   await page.keyboard.press('Escape');
   await expect(tag(page)).toHaveCount(0);
   await tab.click();
   const close = drawer(page).getByRole('button', { name: 'Close Blob' });
-  expect(await drawer(page).evaluate((el) => getComputedStyle(el).animationName)).toBe('fade-in');
+  expect(await moves(drawer(page))).toContain('opacity');
+  expect(await moves(drawer(page))).not.toContain('transform');
   // The close corner still fades to red.
-  expect(await close.evaluate((el) => getComputedStyle(el).transitionProperty)).toContain('background-color');
+  expect(await moves(close)).toContain('background-color');
+});
+
+test('motion: arrivals can be interrupted, grow from where they belong, and keyboard and labels do not dawdle', async ({ page, driver }) => {
+  await driver.open(page);
+  await continueAsGuest(page);
+  const tab = blob(page);
+  const style = (target: ReturnType<typeof tag>, property: string) => target.evaluate((el, name) => getComputedStyle(el).getPropertyValue(name), property);
+
+  // Arrivals are transitions, not fixed animations: closing part-way through an
+  // opening turns it around from wherever it had got to.
+  await expect(drawer(page)).toBeVisible();
+  expect(await style(drawer(page), 'animation-name')).toBe('none');
+  expect(await style(drawer(page), 'transition-property')).toBe('opacity, transform');
+
+  // The card grows out of the element it is pinned to: here it sits below the
+  // button, so its origin is on its top edge, under the button's centre.
+  await comment(page, '#hero', 'Grows from the button');
+  await pins(page).click();
+  await expect(tag(page)).toBeVisible();
+  await settled(page);
+  expect(await style(tag(page), 'animation-name')).toBe('none');
+  const hero = (await page.locator('#hero').boundingBox())!;
+  const card = (await tag(page).boundingBox())!;
+  const origin = (await style(tag(page), 'transform-origin')).split(' ').map(parseFloat);
+  expect(card.y).toBeGreaterThan(hero.y + hero.height);
+  expect(origin[0]).toBeCloseTo(hero.x + hero.width / 2 - card.x, 0);
+  expect(origin[1]).toBe(0);
+
+  // The reaction choices grow out of the smiley, and start barely smaller.
+  const first = tag(page).locator('.tag-comment').first();
+  await first.hover();
+  const smiley = first.getByRole('button', { name: 'Add a reaction' });
+  await smiley.click();
+  const choices = first.getByRole('group', { name: 'Reactions' });
+  await expect(choices).toHaveCSS('visibility', 'visible');
+  await settled(page);
+  const [pill, from] = [(await choices.boundingBox())!, (await smiley.boundingBox())!];
+  const pillOrigin = (await style(choices, 'transform-origin')).split(' ').map(parseFloat);
+  expect(pillOrigin[0]).toBeCloseTo(from.x + from.width / 2 - pill.x, 0);
+  expect(pillOrigin[1]).toBeCloseTo(pill.height, 0); // its bottom edge: it opened above the smiley
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(tag(page)).toHaveCount(0);
+
+  // Reached with the keyboard, the tab is simply there: no slide. It tucks away
+  // quicker than it comes out.
+  await page.mouse.move(300, 300);
+  await expect(tab).not.toHaveClass(/edge-tab--out/, { timeout: 8000 });
+  expect(await style(tab, 'transition-duration')).toBe('0.17s, 0.12s');
+  await page.keyboard.press('Tab');
+  await tab.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(tab).toBeFocused();
+  expect(await style(tab, 'transition-duration')).toBe('0s, 0.12s');
+
+  // Navigation labels: the first waits a moment, the rest are immediate.
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Add a Blob' }).click();
+  const nav = page.getByRole('navigation', { name: 'Comment tools' });
+  const resolved = nav.getByRole('button', { name: 'Resolved conversations' });
+  const label = resolved.locator('.nav-tip');
+  await resolved.hover();
+  expect(await style(label, 'transition-delay')).toContain('0.3s');
+  await expect(label).toBeVisible();
+  await expect(nav).toHaveClass(/guest-nav--warm/);
+  expect(await style(label, 'transition-duration')).toBe('0s');
+  // Leaving the bar cools it down again.
+  await page.mouse.move(300, 300);
+  await expect(nav).not.toHaveClass(/guest-nav--warm/);
+  await expect(label).toBeHidden();
 });
 
 test('closing the drawer: the close corner turns red when pointed at or focused', async ({ page, driver }) => {
@@ -1215,6 +1307,56 @@ test('feedback: a failed send keeps what was written, and without a relay an ema
   await expect(drawer(page).getByRole('link', { name: 'blob@davidokunlola.com' })).toHaveAttribute('href', mailto);
 });
 
+test('clicking outside the avatar menu dismisses it and preserves the clicked action', async ({ page, driver }) => {
+  await driver.open(page);
+  await blob(page).click();
+  const panel = drawer(page);
+  const avatar = panel.getByLabel('Guest profile');
+  const dark = panel.getByRole('button', { name: 'Dark', exact: true });
+  await avatar.click();
+  await dark.click();
+  await expect(dark).toBeVisible();
+  await expect(panel).toHaveAttribute('data-theme', 'Dark');
+  await panel.locator('.drawer__title').click();
+  await expect(dark).toBeHidden();
+  await avatar.click();
+  await page.locator('#hero').click();
+  await expect(dark).toBeHidden();
+  await expect(panel).toBeVisible();
+  await expect(page).toHaveTitle('CLICKED');
+});
+
+test('drawer remembers appearance after closing and reloading', async ({ page, driver }) => {
+  await driver.open(page);
+  const panel = drawer(page);
+  const profile = panel.getByLabel('Guest profile');
+  const option = (name: string) => panel.getByRole('button', { name, exact: true });
+  await blob(page).click();
+  await profile.click();
+  await expect(option('Light')).toHaveAttribute('aria-pressed', 'true');
+  for (const name of ['Light', 'Dark', 'System']) {
+    await expect(option(name).locator('svg')).toBeVisible();
+  }
+  await option('Dark').click();
+  await expect(panel).toHaveCSS('color-scheme', 'dark');
+  await panel.getByRole('button', { name: 'Close Blob' }).click();
+  await expect(panel).toHaveCount(0);
+  await blob(page).click();
+  await expect(panel).toHaveAttribute('data-theme', 'Dark');
+
+  await driver.reload(page);
+  await blob(page).click();
+  await profile.click();
+  await expect(option('Dark')).toHaveAttribute('aria-pressed', 'true');
+  await option('System').click();
+  await expect(panel).toHaveAttribute('data-theme', 'System');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(panel).toHaveCSS('color-scheme', 'dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(panel).not.toHaveCSS('color-scheme', 'dark');
+  await expect(option('System')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('approved guest screens fit a narrow viewport', async ({ page, driver }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await driver.open(page);
@@ -1231,6 +1373,11 @@ test('approved guest screens fit a narrow viewport', async ({ page, driver }) =>
   await drawer(page).getByRole('button', { name: 'Continue as a Guest' }).click();
   await page.getByRole('button', { name: 'Add a Blob' }).click();
   const nav = page.getByRole('navigation', { name: 'Comment tools' });
+  const guest = nav.getByRole('button', { name: 'Guest profile' });
+  await guest.click();
+  await expect(nav.getByRole('button', { name: 'Sign in' })).toBeInViewport({ ratio: 1 });
+  await expect(nav.getByRole('button', { name: 'Exit', exact: true })).toBeInViewport({ ratio: 1 });
+  await guest.click();
   await nav.getByRole('button', { name: 'Expand tools' }).click();
   const box = await nav.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);

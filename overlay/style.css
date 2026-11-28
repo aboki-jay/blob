@@ -369,14 +369,22 @@ li {
   transition: background-color 120ms ease, stroke 120ms ease;
 }
 
-.drawer__close:hover,
 .drawer__close:focus-visible {
   background: var(--error-hover);
 }
 
-.drawer__close:hover .icon svg path,
 .drawer__close:focus-visible .icon svg path {
   stroke: var(--white);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .drawer__close:hover {
+    background: var(--error-hover);
+  }
+
+  .drawer__close:hover .icon svg path {
+    stroke: var(--white);
+  }
 }
 
 .drawer__close:focus-visible {
@@ -911,10 +919,18 @@ textarea::placeholder {
   box-shadow: 0 0 0 2px var(--white), var(--shadow-e2);
 }
 
-.pin:hover,
 .pin--active {
   background: var(--primary-hover);
   box-shadow: 0 0 0 2px var(--white), 0 0 0 5px var(--primary-focus), var(--shadow-e2);
+}
+
+/* Hover looks only where there is a pointer that can hover: on a touch screen
+   a tap would leave them stuck on. */
+@media (hover: hover) and (pointer: fine) {
+  .pin:hover {
+    background: var(--primary-hover);
+    box-shadow: 0 0 0 2px var(--white), 0 0 0 5px var(--primary-focus), var(--shadow-e2);
+  }
 }
 
 .catcher {
@@ -930,16 +946,27 @@ textarea::placeholder {
   pointer-events: none !important;
 }
 
-.outline--pulse {
-  animation: pulse 1.2s ease-out 2;
+/* "Here it is": a soft halo beats twice around the highlighted element. The
+   halo is a separate layer that only fades and grows a touch, which the browser
+   can do without redrawing anything. (A growing shadow is redrawn every frame.) */
+.outline--pulse::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 14px;
+  box-shadow: 0 0 0 10px rgba(98, 61, 245, 0.28);
+  opacity: 0;
+  animation: pulse 1.2s var(--ease-out) 2;
 }
 
 @keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--primary), 0 0 0 4px rgba(98, 61, 245, 0.4);
+  from {
+    opacity: 1;
+    transform: scale(0.98);
   }
-  100% {
-    box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--primary), 0 0 0 18px rgba(98, 61, 245, 0);
+  to {
+    opacity: 0;
+    transform: scale(1.02);
   }
 }
 
@@ -1050,8 +1077,9 @@ textarea::placeholder {
 .profile-menu { position: absolute; bottom: 60px; right: 20px; width: min(310px, calc(100% - 40px)); background: var(--bg-base); color: var(--text); border: 1px solid var(--border-soft); box-shadow: var(--shadow-e3); border-radius: 16px; padding: 8px; z-index: 2; }
 .profile-id, .profile-menu > button, .theme-choices { display: flex; gap: 10px; align-items: center; padding: 10px; }
 .profile-id p { font-size: 12px; color: var(--text-secondary); }
-.theme-choices { border-top: 1px solid var(--border-soft); }
-.theme-choices button { flex: 1; padding: 4px; border-radius: 6px; }
+.theme-choices { border-top: 1px solid var(--border-soft); flex-wrap: wrap; }
+.theme-choices button { flex: 1; display: inline-flex; gap: 5px; align-items: center; justify-content: center; padding: 4px; border-radius: 6px; }
+.theme-choices .icon svg { width: 16px; height: 16px; }
 .theme-choices button[aria-pressed=true] { background: var(--bg-fill2); }
 .feedback-form { width: min(490px,100%); margin: min(8vh,68px) auto 0; display: grid; gap: 24px; }
 .feedback-form h2 { text-align: center; font: 600 20px/28px var(--font-heading); }
@@ -1061,21 +1089,82 @@ textarea::placeholder {
 .ratings button:is(:hover,:focus-visible,[aria-pressed=true]) small { visibility: visible; }
 .feedback-form textarea { display: block; width: 100%; height: 138px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-base); resize: vertical; }
 .feedback-form > button { min-height: 44px; }
-.guest-nav { width: max-content; max-width: calc(100vw - 12px); min-height: 48px; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--bg-fill3); border: 0; }
-.guest-nav button, .nav-current { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; min-height: 32px; border-radius: 999px; }
-.nav-current { background: var(--bg-base); } .nav-mascot svg { width: 28px; height: 28px; }
-.nav-avatar { border-left: 1px solid var(--border); padding-left: 8px; }
-.guest-nav button[aria-expanded=true] svg { transform: rotate(180deg); }
-
-/* Collapsed bar: a pill naming whatever is pointed at or focused, 5px under the
-   bar (Figma "Frame 47"). The bar sits high enough to leave the pill room. */
 .guest-nav {
+  width: max-content;
+  max-width: calc(100vw - 12px);
+  min-height: 48px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
   bottom: 45px;
-  overflow: visible;
+  border: 0;
+  box-shadow: none;
+  background: var(--bg-fill3);
+  color: var(--text-secondary);
+  font: 500 14px/20px var(--font-body);
+  letter-spacing: -0.14px;
 }
-
-.nav-item {
+.guest-nav button, .guest-nav .nav-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.guest-nav > .nav-item {
   position: relative;
+  flex: none;
+  height: 32px;
+  min-width: 40px;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+}
+.guest-nav .nav-current {
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--bg-base);
+  box-shadow: inset 0 0 0 1px rgb(9 10 11 / 8%), 0 1px 1px rgb(25 24 27 / 4%);
+}
+.nav-mascot svg { width: 28px; height: 28px; }
+.nav-divider { position: relative; align-self: center; height: 32px; }
+.nav-divider::after {
+  content: '';
+  position: absolute;
+  left: -0.5px;
+  height: 100%;
+  border-left: 1px solid var(--border);
+}
+.nav-profile { display: inline-flex; align-items: center; border-radius: 20px; }
+.nav-avatar { position: relative; border-radius: 50%; }
+.nav-portrait {
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--bg-fill4);
+}
+.nav-portrait > .icon { position: absolute; left: 50%; transform: translateX(-50%); }
+.nav-portrait > .icon:first-child { top: 15%; }
+.nav-portrait > .icon:last-child { bottom: 0; }
+.nav-exit, .nav-sign-in { font-size: 13px; letter-spacing: -0.13px; }
+.nav-exit { width: 43px; height: 24px; border-radius: var(--radius-md); }
+.guest-nav > .nav-expand { min-width: 24px; height: 24px; padding: 4px; }
+.nav-expand[aria-expanded=true] svg { transform: rotate(180deg); }
+.nav-expand .nav-tip { top: calc(100% + 17px); }
+.guest-nav[data-profile-open] { padding: 3px 8px; border: 1px solid var(--border-soft); }
+.guest-nav[data-profile-open] .nav-profile { padding: 4px 6px; background: var(--bg-base); }
+.guest-nav[data-profile-open] .nav-divider { height: 30px; }
+.guest-nav[data-profile-open] .nav-current { background: none; box-shadow: none; }
+.guest-nav[data-profile-open] .nav-secondary svg [stroke] { stroke: var(--text-disabled); }
+.nav-sign-in { width: 62px; height: 28px; color: var(--primary); }
+.guest-nav button:disabled { cursor: default; }
+@media (max-width: 410px) {
+  .guest-nav[data-profile-open] { column-gap: 2px; }
+}
+@media (max-width: 360px) {
+  .nav-expand .nav-tip { left: auto; right: 0; transform: none; }
 }
 
 .nav-tip {
@@ -1136,11 +1225,18 @@ textarea::placeholder {
 .activity-peek { display: none; }
 .activity-pane .activity { position: relative; }
 .activity-pane .activity:is(:hover,:focus-visible) { z-index: 1; }
-.activity-pane .activity:is(:hover,:focus-visible) .activity-peek {
+/* The preview waits a moment before appearing, so it does not flash up while the
+   pointer is only passing over the list, and fades instead of popping. Reached
+   with the keyboard it is simply there. */
+.activity-pane .activity .activity-peek {
   display: grid; gap: 8px; pointer-events: none; position: absolute; top: 50%; right: 4px;
   width: min(280px, 92%); padding: 12px; text-align: left; border: 1px solid var(--border-soft);
   border-radius: 12px; background: var(--bg-base); box-shadow: var(--shadow-e2);
+  visibility: hidden; opacity: 0;
+  transition: opacity 120ms ease, visibility 0s linear 120ms;
 }
+.activity-pane .activity:hover .activity-peek { visibility: visible; opacity: 1; transition-delay: 300ms; }
+.activity-pane .activity:focus-visible .activity-peek { visibility: visible; opacity: 1; transition: none; }
 .peek-body { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .peek-link { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-soft); padding-top: 6px; }
 .state-art:not(.state-art--site) .state-art__sheet { inset: 0; padding: 9px; gap: 6px; }

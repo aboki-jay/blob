@@ -85,9 +85,12 @@ function TagShell({
   }
   // Labels such as `Button “Save”` already carry their own quotation marks.
   const pinnedTo = /[“”]/.test(label) ? label : `“${label}”`;
+  // The card grows out of the element it belongs to: the point of the card
+  // nearest that element's centre, whichever side the card ended up on.
+  const origin = `${clamp(rect.left + rect.width / 2 - left, 0, width)}px ${clamp(rect.top + rect.height / 2 - top, 0, height)}px`;
 
   return (
-    <div ref={ref} className="comment-tag" style={{ left, top }} role="dialog" aria-label={title}>
+    <div ref={ref} className="comment-tag" style={{ left, top, transformOrigin: origin }} role="dialog" aria-label={title}>
       <div className="tag__header">
         <p>{title}</p>
         <span className="tag__header-actions">
@@ -271,19 +274,24 @@ function Comment({
   // card's scrolling list cannot cut them off.
   const smiley = useRef<HTMLButtonElement>(null);
   const choices = useRef<HTMLSpanElement>(null);
-  const [place, setPlace] = useState<{ left: number; top: number; below: boolean } | null>(null);
+  const [place, setPlace] = useState<{ left: number; top: number; below: boolean; origin: string } | null>(null);
   useLayoutEffect(() => {
     if (!choosing) return setPlace(null);
     const from = smiley.current?.getBoundingClientRect();
-    const size = choices.current?.getBoundingClientRect();
-    if (!from || !size) return;
+    const pill = choices.current;
+    if (!from || !pill) return;
+    // Its laid-out size, not its drawn one: it is already growing into view.
+    const size = { width: pill.offsetWidth, height: pill.offsetHeight };
     const vp = viewport();
     // Above the smiley, or below it when there is no room above.
     const below = from.top - size.height - 8 < 8;
+    const left = clamp(from.left - 8, 8, vp.w - size.width - 8);
     setPlace({
-      left: clamp(from.left - 8, 8, vp.w - size.width - 8),
+      left,
       top: below ? from.bottom + 8 : from.top - size.height - 8,
       below,
+      // It grows out of the smiley, wherever it had to be moved to fit.
+      origin: `${clamp(from.left + from.width / 2 - left, 0, size.width)}px ${below ? '0' : '100%'}`,
     });
   }, [choosing]);
   // They would be left behind if anything moved, so moving puts them away.
@@ -351,7 +359,7 @@ function Comment({
                 ref={choices}
                 className={`tag-react__choices ${place ? (place.below ? 'is-below' : 'is-above') : ''}`}
                 // Measured first, then shown where it belongs.
-                style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: 'hidden' }}
+                style={place ? { left: place.left, top: place.top, transformOrigin: place.origin } : { left: 0, top: 0, visibility: 'hidden' }}
                 role="group"
                 aria-label="Reactions"
               >

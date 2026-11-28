@@ -11,6 +11,7 @@ import {
   REACTIONS,
   SCHEMA_VERSION,
   defaultSettings,
+  isTheme,
   emptyData,
   type AnchorDescriptor,
   type BlobData,
@@ -68,6 +69,8 @@ const MIGRATIONS: Record<number, Migration> = {
   // Version 2 lets a comment carry reactions. Comments saved before have none,
   // so nothing in them needs changing.
   1: (data) => ({ ...data, version: 2 }),
+  // Theme lives in the settings key. Older settings acquire Light in parseSettings.
+  2: (data) => ({ ...data, version: 3 }),
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -106,6 +109,7 @@ export function parseSettings(raw: unknown): BlobSettings {
   const settings = defaultSettings();
   if (!isRecord(raw)) return settings;
   if (typeof raw.onboarded === 'boolean') settings.onboarded = raw.onboarded;
+  if (isTheme(raw.theme)) settings.theme = raw.theme;
   const pos = raw.blobPosition;
   if (isRecord(pos) && typeof pos.x === 'number' && typeof pos.y === 'number') {
     settings.blobPosition = { x: clamp01(pos.x), y: clamp01(pos.y) };

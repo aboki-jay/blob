@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { OVERLAY_TAG } from '@/lib/anchor';
-import type { AnchorDescriptor } from '@/lib/types';
+import { THEMES, type AnchorDescriptor, type Theme } from '@/lib/types';
+import moon from '@/assets/icons/moon.svg?raw';
+import sun from '@/assets/icons/sun-dim.svg?raw';
+import monitor from '@/assets/icons/monitor-cog.svg?raw';
+import navAvatarHead from '@/assets/icons/nav-avatar-head.svg?raw';
+import navAvatarBody from '@/assets/icons/nav-avatar-body.svg?raw';
+import navInbox from '@/assets/icons/nav-inbox.svg?raw';
+import { send } from './client';
 import { Feedback } from './feedback';
 import { Avatar, Icon, StorageNote, icons } from './ui';
 
@@ -109,14 +116,17 @@ export function BlobButton({
 /* ---------- The drawer ---------- */
 
 export type Section = 'activity' | 'history';
+const themeIcons: Record<Theme, string> = { Dark: moon, Light: sun, System: monitor };
 
 export function Drawer({
+  theme,
   tag,
   section,
   onSection,
   onClose,
   children,
 }: {
+  theme: Theme;
   tag?: Element | null;
   section: Section | null;
   onSection: (section: Section) => void;
@@ -125,7 +135,11 @@ export function Drawer({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState(false);
-  const [theme, setTheme] = useState('Light');
+  const [themeError, setThemeError] = useState(false);
+  const chooseTheme = async (value: Theme) => {
+    const result = await send({ type: 'settings/set', settings: { theme: value } });
+    setThemeError(!result.ok);
+  };
   const profile = useRef<HTMLDetailsElement>(null);
   const navigate = (next: Section) => {
     setFeedback(false);
@@ -133,6 +147,14 @@ export function Drawer({
     onSection(next);
   };
   useEffect(() => ref.current?.focus(), []);
+  useEffect(() => {
+    const dismissProfile = (event: MouseEvent) => {
+      const menu = profile.current;
+      if (menu?.open && !event.composedPath().includes(menu)) menu.open = false;
+    };
+    document.addEventListener('click', dismissProfile, true);
+    return () => document.removeEventListener('click', dismissProfile, true);
+  }, []);
   const rect = tag?.getBoundingClientRect();
   const tagStyle = rect ? {
     left: clamp(rect.left, 8, viewport().w - Math.min(450, viewport().w - 16) - 8),
@@ -199,9 +221,10 @@ export function Drawer({
                 <Icon svg={icons.message} />Feedback
               </button>
               <div className="theme-choices" aria-label="Appearance">
-                {['Dark', 'Light', 'System'].map(value => <button key={value} aria-pressed={theme === value}
-                  onClick={() => setTheme(value)}>{value}</button>)}
+                {THEMES.map(value => <button key={value} aria-pressed={theme === value}
+                  onClick={() => void chooseTheme(value)}><Icon svg={themeIcons[value]} />{value}</button>)}
               </div>
+              {themeError && <p className="t12 danger" role="alert">Couldn’t save appearance. Please try again.</p>}
             </div>
           </details>
         </nav>
@@ -355,6 +378,21 @@ export function Bar({ children, actions }: { children: ReactNode; actions: React
  */
 export function GuestNav({ onExit, onResolved }: { onExit: () => void; onResolved: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const avatar = useRef<HTMLButtonElement>(null);
+  // The first label waits a moment, so the bar does not light up when the
+  // pointer merely crosses it. Once one has shown, the rest are immediate.
+  const [warm, setWarm] = useState(false);
+  const warming = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(warming.current), []);
+  const warmUp = () => {
+    clearTimeout(warming.current);
+    warming.current = setTimeout(() => setWarm(true), 300);
+  };
+  const coolDown = () => {
+    clearTimeout(warming.current);
+    setWarm(false);
+  };
   // The pill repeats what the item's label already says, so it is hidden from screen readers.
   const tip = (label: string) =>
     !expanded && (
@@ -363,30 +401,58 @@ export function GuestNav({ onExit, onResolved }: { onExit: () => void; onResolve
       </span>
     );
   return (
-    <nav className={`bar guest-nav ${expanded ? 'guest-nav--expanded' : ''}`} aria-label="Comment tools">
+    <nav
+      className={`bar guest-nav ${expanded ? 'guest-nav--expanded' : ''} ${warm ? 'guest-nav--warm' : ''}`}
+      data-profile-open={profileOpen || undefined}
+      aria-label="Comment tools"
+      onPointerEnter={warmUp}
+      onPointerLeave={coolDown}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setProfileOpen(false);
+      }}
+      onKeyDown={event => {
+        if (event.key !== 'Escape' || !profileOpen) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setProfileOpen(false);
+        avatar.current?.focus();
+      }}
+    >
       <Icon svg={icons.mascot} className="nav-mascot" />
       <span className="nav-current nav-item" aria-label="Comment" aria-current="true">
         <Icon svg={icons.commentMode} />
         {expanded && 'Comment'}
         {tip('Comment')}
       </span>
-      <button className="nav-item" disabled aria-label="Inbox unavailable for guests">
-        <Icon svg={icons.message} />
+      <button className="nav-item nav-secondary" disabled aria-label="Inbox unavailable for guests">
+        <Icon svg={navInbox} />
+        {expanded && 'Inbox'}
         {tip('Inbox unavailable for guests')}
       </button>
-      <button className="nav-item" aria-label="Resolved conversations" onClick={onResolved}>
+      <button className="nav-item nav-secondary" aria-label="Resolved conversations" onClick={onResolved}>
         <Icon svg={icons.resolved} />
         {expanded && 'Resolved'}
         {tip('Resolved')}
       </button>
-      <span className="nav-avatar nav-item" aria-label="Guest">
-        <Avatar small />
-        {tip('Guest')}
+      <span className="nav-divider" aria-hidden="true" />
+      <span className="nav-profile">
+        <button ref={avatar} type="button" className="nav-item nav-avatar" aria-label="Guest profile"
+          aria-expanded={profileOpen} onClick={() => setProfileOpen(!profileOpen)}>
+          <span className="nav-portrait" aria-hidden="true">
+            <Icon svg={navAvatarHead} />
+            <Icon svg={navAvatarBody} />
+          </span>
+          {!profileOpen && tip('Guest')}
+        </button>
+        {profileOpen && <button type="button" className="nav-sign-in" disabled>Sign in</button>}
       </span>
-      <button aria-label="Cancel" onClick={onExit}>
+      <button className="nav-exit" onClick={onExit}>
         Exit
       </button>
-      <button className="nav-item" aria-expanded={expanded} aria-label={expanded ? 'Collapse tools' : 'Expand tools'} onClick={() => setExpanded(!expanded)}>
+      <button className="nav-item nav-expand" aria-expanded={expanded} aria-label={expanded ? 'Collapse tools' : 'Expand tools'} onClick={() => {
+        setProfileOpen(false);
+        setExpanded(!expanded);
+      }}>
         <Icon svg={icons.chevron} />
         {tip('Expand')}
       </button>

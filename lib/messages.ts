@@ -6,7 +6,7 @@
  * it. Everything in a request is treated as untrusted input.
  */
 
-import { LIMITS, REACTIONS, type AnchorAttr, type AnchorDescriptor, type BlobSettings, type Reaction, type ThreadStatus } from './types';
+import { LIMITS, REACTIONS, isTheme, type AnchorAttr, type AnchorDescriptor, type BlobSettings, type Reaction, type ThreadStatus } from './types';
 import { FEEDBACK_MAX, RATINGS, type Rating } from './feedback';
 import type { ErrorCode } from './storage/store';
 
@@ -130,6 +130,10 @@ export function parseRequest(raw: unknown): Request | null {
     case 'settings/set': {
       if (!isRecord(raw.settings)) return null;
       const settings: Partial<BlobSettings> = {};
+      if ('theme' in raw.settings) {
+        if (!isTheme(raw.settings.theme)) return null;
+        settings.theme = raw.settings.theme;
+      }
       if (typeof raw.settings.onboarded === 'boolean') settings.onboarded = raw.settings.onboarded;
       const pos = raw.settings.blobPosition;
       if (isRecord(pos) && typeof pos.x === 'number' && typeof pos.y === 'number') {

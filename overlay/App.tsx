@@ -402,6 +402,7 @@ function PageLayer({
       <Leaving ms={160}>
         {open && (
           <Drawer
+            theme={settings.theme}
             section={section}
             onSection={(next) => setView(next === 'history' ? { name: 'history', tab: 'websites' } : { name: 'activity' })}
             onClose={closeDrawer}

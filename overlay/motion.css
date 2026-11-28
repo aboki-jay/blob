@@ -11,6 +11,45 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+/* ---------- Arriving ----------
+   What each thing looks like in the instant before it appears. It then moves to
+   its normal look using its own `transition` (launcher.css, tag.css), which
+   means an arrival can be interrupted part-way without jumping.
+
+   The drawer slides in from its edge. The card and the reaction choices grow,
+   barely, out of the element or smiley they belong to. The tab slides in from
+   beyond the window edge; a tab that already has keyboard focus or the pointer
+   on it is simply there. */
+
+@starting-style {
+  .root .drawer {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+
+  .root[data-side='left'] .drawer {
+    transform: translateX(-32px);
+  }
+
+  .comment-tag {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  .tag-react__choices {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  .blob.edge-tab:not(:hover, :focus-visible) {
+    transform: translateX(100%);
+  }
+
+  .blob.edge-tab--left:not(:hover, :focus-visible) {
+    transform: translateX(-100%);
+  }
+}
+
 /* ---------- Leaving ----------
    Something that closes stays for a moment, marked `data-leaving` (see
    presence.tsx), and fades back the way it came. Leaving is quicker than
@@ -37,7 +76,7 @@
 
 [data-leaving] > .comment-tag {
   opacity: 0;
-  transform: translateY(4px);
+  transform: scale(0.98);
   transition: opacity 120ms var(--ease-out), transform 120ms var(--ease-out);
 }
 
@@ -47,15 +86,31 @@
   transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out);
 }
 
-/* The navigation label fades out as well as in. `visibility` waits for the
-   fade to finish before hiding, and does not wait at all when showing. */
+/* The navigation label fades out as well as in: `visibility` waits for the fade
+   to finish before hiding.
+
+   Showing: the first label waits a moment, so the bar does not light up when
+   the pointer merely crosses it. Once the bar is "warm" (see GuestNav) the
+   others are immediate, and so is a label reached with the keyboard. */
 .nav-tip {
   transition: opacity 120ms ease, visibility 0s linear 120ms;
 }
 
-.nav-item:hover > .nav-tip,
+.nav-item:hover > .nav-tip {
+  transition-delay: 300ms;
+}
+
+.guest-nav--warm .nav-item:hover > .nav-tip,
 .nav-item:focus-visible > .nav-tip {
-  transition-delay: 0s;
+  transition: none;
+}
+
+/* Every chevron turns the same way: quickly, and none of them snap. */
+.history-site summary::after,
+.guest-nav button svg,
+.thread-replies .icon,
+.tag-replies__bar .icon svg {
+  transition: transform 120ms var(--ease-out);
 }
 
 /* ---------- Pressing ----------
@@ -123,12 +178,6 @@
    Fewer and gentler, not none. Colours and fades stay, because they help show
    what changed. Nothing slides, grows or pulses. */
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -136,15 +185,10 @@
     transition-property: opacity, visibility, color, background-color, border-color, stroke, fill, box-shadow !important;
   }
 
-  .root .drawer,
-  .comment-tag,
-  .tag-react__choices.is-above,
-  .tag-react__choices.is-below {
-    animation: fade-in 160ms ease backwards !important;
-  }
-
-  .blob.edge-tab,
-  .outline--pulse {
+  /* With `transform` off the list above, arrivals and departures are fades
+     only: nothing slides or grows on the way. The highlight's halo does not
+     beat, and the emoji does not swell. */
+  .outline--pulse::after {
     animation: none !important;
   }
 
