@@ -6,7 +6,8 @@
  * it. Everything in a request is treated as untrusted input.
  */
 
-import { LIMITS, REACTIONS, isTheme, type AnchorAttr, type AnchorDescriptor, type BlobSettings, type Reaction, type ThreadStatus } from './types';
+import { cleanBody, isId, isRecord, parseAnchor } from './input';
+import { LIMITS, REACTIONS, isTheme, type AnchorDescriptor, type BlobSettings, type Reaction, type ThreadStatus } from './types';
 import { FEEDBACK_MAX, RATINGS, type Rating } from './feedback';
 import type { ErrorCode } from './storage/store';
 
@@ -34,60 +35,10 @@ export type Response<T = unknown> = { ok: true; data: T } | { ok: false; error: 
 /** Messages the background or popup sends to the overlay in a tab. */
 export type OverlayCommand = { type: 'overlay/ping' } | { type: 'overlay/open' } | { type: 'overlay/unmount' };
 
-const ID = /^[A-Za-z0-9_-]{8,64}$/;
 const DRAFT_KEY = /^(new|reply):.{1,2100}$/s;
-const ATTRS: AnchorAttr[] = ['role', 'type', 'name', 'href', 'alt', 'ariaLabel', 'testId'];
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isId = (v: unknown): v is string => typeof v === 'string' && ID.test(v);
-const str = (v: unknown, max: number): string | undefined =>
-  typeof v === 'string' && v.length > 0 ? v.slice(0, max) : undefined;
-
-/** A comment must contain something other than whitespace. Returns the trimmed text. */
-export function cleanBody(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const body = value.trim();
-  if (!body || body.length > LIMITS.body) return null;
-  return body;
-}
-
-/** Rebuilds an anchor from untrusted input, keeping only known fields within limits. */
-export function parseAnchor(value: unknown): AnchorDescriptor | null {
-  if (!isRecord(value)) return null;
-  const selector = str(value.selector, LIMITS.selector);
-  const tag = str(value.tag, 60);
-  const label = str(value.label, LIMITS.label);
-  const offset = value.offset;
-  if (!selector || !tag || !label || !isRecord(offset)) return null;
-  const { x, y } = offset;
-  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-
-  const anchor: AnchorDescriptor = {
-    selector,
-    tag: tag.toLowerCase(),
-    label,
-    offset: { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) },
-  };
-  const id = str(value.id, 64);
-  if (id) anchor.id = id;
-  const text = str(value.text, LIMITS.anchorText);
-  if (text) anchor.text = text;
-  const context = str(value.context, LIMITS.anchorContext);
-  if (context) anchor.context = context;
-  if (isRecord(value.attrs)) {
-    const attrs: Partial<Record<AnchorAttr, string>> = {};
-    for (const key of ATTRS) {
-      const attr = str(value.attrs[key], 120);
-      if (attr) attrs[key] = attr;
-    }
-    if (Object.keys(attrs).length) anchor.attrs = attrs;
-  }
-  if (Array.isArray(value.classes)) {
-    const classes = value.classes.filter((c): c is string => typeof c === 'string' && c.length <= 64).slice(0, 3);
-    if (classes.length) anchor.classes = classes;
-  }
-  return anchor;
-}
+// The checks shared with the sharing server live in input.ts.
+export { cleanBody, parseAnchor };
 
 /** Returns a checked request, or null if the message is not one Blob understands. */
 export function parseRequest(raw: unknown): Request | null {

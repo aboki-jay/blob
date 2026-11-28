@@ -2,9 +2,13 @@
 
 Last updated: 28 November 2026
 
-Milestone 1 implements local guest comments. On 28 November 2026 the maintainer reported that Milestone 1 had been checked in Chrome and accepted it. Which steps of the manual walkthrough were covered was not written down, so the "Not verified" list below is left as it was. The pull request is not merged yet. Milestone 2 is planned, not started.
+Milestone 1 implements local guest comments. On 28 November 2026 the maintainer reported that Milestone 1 had been checked in Chrome and accepted it. Which steps of the manual walkthrough were covered was not written down, so the "Not verified" list below is left as it was. Its pull request was merged into `main` on 28 November 2026.
+
+Milestone 2 (shared threads) is in progress on the branch `milestone-2-shared-threads`. Step 1 is built: the sharing server in `worker/api/`, its access rules, and the 150-person load test, which passed against a test copy on Cloudflare on 28 November 2026. The real service is not deployed and the extension does not use any server yet, so nothing has changed for anyone using Blob. See "Milestone 2, step 1" below.
 
 ## Approved design review
+
+The [email templates](email/README.md) cover the planned sign-in code, the maintainer's existing plain-text feedback notification and a proposed receipt for the person who submitted feedback. The current form confirms delivery inside Blob and collects no email address.
 
 Bottom navigation, 28 November. The compact guest bar measures 319 × 48 px. Its three tool slots are each 40 × 32 px. Activating the gray guest avatar reveals the disabled Sign in control in a 395 × 48 px bar. Escape closes that control and returns focus to the avatar. The expanded tools show the Inbox label. The two guest frames show the visual states. Opening the second state by click or keyboard is an implementation choice. [Approved guest frames](https://www.figma.com/design/Fcy1Fpb2zNZALUhRbNjkUC/Blob?node-id=271-6442)
 
@@ -55,13 +59,56 @@ Verification for these changes: `npm run check` passed (78 unit tests, productio
 - Pins follow their element; a missing or ambiguous element shows "Location unavailable" and can be reattached.
 - Single-page app navigation, and removal from the page when site access is taken away.
 
+## Milestone 2, step 1: the sharing server
+
+Built 28 November 2026 in `worker/api/`. **Only a test copy is deployed (`blob-api-test`, with its own database `blob-test`); the real service is not. The extension does not call either. Google sign-in is not built**, so the only way to have an account is a test-only sign-in that the real service cannot have.
+
+What exists:
+
+- A database layout for accounts, sign-in fingerprints, sessions, shared conversations, comments and limit counters.
+- Requests to share a conversation, read one by its link, reply, delete your own reply, stop sharing, list what you share, change your name, sign out, and delete your account.
+- The four link-expiry choices, checked on every read and reply, with a timer that deletes what has run out.
+- Firm per-person limits counted in the database.
+- A check, part of `npm run check`, that fails if the test-only sign-in could be switched on for the real service.
+
+How it was verified:
+
+| Check | Result |
+| --- | --- |
+| Access rules (`tests/unit/api.test.ts`, 28 tests) | Pass. Run against the real request handler and the real database statements, with a stand-in database built on SQLite, which is what Cloudflare's database is. Covers: nothing shown without signing in; reading and replying with a link; retries never repeating; only the owner stopping; all four expiry choices at their exact deadline with a controlled clock; a fresh link on sharing again; deleting your own reply only; account deletion removing everything of yours and nothing of anyone else's; limits holding against a burst; bad input refused; "busy" when the database fails. |
+| 150-person load test in the unit tests | Pass. About 2,200 requests and 620 replies, one in ten sent twice on purpose: none failed, none lost, none doubled. The heaviest request needed 6 database statements, against 50 allowed. |
+| CI on the pull request ([aboki-jay/blob#2](https://github.com/aboki-jay/blob/pull/2), run 13 on `03095c2`, 28 November 2026) | Pass, read from the logs. The server's tests and the 150-person load test passed on CI's Linux machine as they do on the development machine (2,217 requests, 616 replies, 57 sent twice, heaviest request 6 statements). The worker configuration check passed. Browser tests: stand-in run 30 passed and 1 skipped; real-extension run 25 passed and 6 skipped. |
+| The load test noticing faults (5 tests) | Pass. A dropped reply, a doubled reply, an invented comment and a single refused request each make it fail. |
+| The same load test against the server on Cloudflare's own runtime and database engine, run locally with `wrangler dev` | Pass, twice: once with every wave of 150 fired at the same instant, once spread over two real minutes. This also confirmed the database statements work on the real engine, not only the stand-in. |
+
+| Every kind of request, once each, against the test copy on Cloudflare (`npm run test:smoke`, 41 steps) | Pass, after one fix. The first deploy failed at deleting an account: Cloudflare's database refuses a text pattern longer than 50 characters, which neither the stand-in nor `wrangler dev` does. The statement no longer uses a pattern, and the stand-in now refuses them. |
+| **The 150-person load test against the test copy on Cloudflare**, spread over two real minutes, with the one-second pass mark (`--real-time --judge-time`), run twice | **Pass, both times.** No request failed, no reply lost or doubled. 95 in 100 reads arrived within 392 and 446 ms; 95 in 100 replies within 446 and 494 ms. Figures are in [MILESTONE-2.md](MILESTONE-2.md), "Load test results so far". |
+| The same with every wave of 150 fired at the same instant (harsher; times not judged) | Pass on correctness. Responses queue to about 1.4 seconds. |
+
+The load test now ends with all 150 people deleting their accounts, so the test copy is left empty; the database was counted afterwards and held nothing.
+
+Not verified:
+
+- The timer that deletes expired conversations has only been run by calling it directly, and its three statements by hand on Cloudflare's database (accepted). Cloudflare's scheduler is set to run it every 15 minutes on the test copy, but no run of it was watched.
+- The Cloudflare timings are from one afternoon, one connection and an empty database. Nothing is known about other regions or a database holding months of conversations.
+- The test copy has no `FINGERPRINT_KEY` secret; the test-only sign-in uses a fixed stand-in key. The real service must have its own before real sign-in exists.
+- The local timings in MILESTONE-2.md come from one development machine and say nothing about production.
+
+Decisions made while building, for the maintainer to know:
+
+- A sign-in lasts 30 days. It is fixed, not extended by use, so that reading costs no database write.
+- Limits: 30 replies a minute and 1,000 a day per person; 30 new shares a day; 20 sign-ins an hour; 500 comments in a conversation; 200 comments uploaded when sharing.
+- A reply that the owner carries over from an earlier link is stored under the owner's account, shown under the name it came with, and flagged as carried over. The server deleted the earlier copy, so it cannot check who really wrote it, and does not pretend to.
+- The first comment of a shared conversation cannot be deleted on its own. Stopping sharing is how a conversation is taken down.
+- Requests live under `/api/v1`, leaving `/t/<code>` free for the recipient's page.
+
 ## What was verified, and how
 
 | Check | Result |
 | --- | --- |
 | Local real-extension run during the approved design pass | Chromium loaded the extension. Six tests passed. Seven were marked failed because closing the browser context exceeded Playwright's 45-second teardown timeout. This run did not establish a clean real-extension pass. |
 | `npm run typecheck` | Passes. |
-| `npm test` | 78 unit tests pass: page identity and URL sanitising, storage (reload persistence, failed writes, duplicate-safe retry, concurrent updates, schema versions and the upgrade from version 1, reactions), request validation and permissions, anchoring (repeated text, moved target, removed target, private fields), and the feedback relay's logic with a stand-in for Cloudflare's email service. |
+| `npm test` | 114 unit tests pass (28 November 2026). 35 of them are the sharing server: its access rules, the 150-person load test, and a test that breaks the server on purpose to prove the load test notices. The rest: page identity and URL sanitising, storage (reload persistence, failed writes, duplicate-safe retry, concurrent updates, schema versions and the upgrade from version 1, reactions), request validation and permissions, anchoring (repeated text, moved target, removed target, private fields), and the feedback relay's logic with a stand-in for Cloudflare's email service. |
 | `npm run build` | Production build succeeds. |
 | `npm run check:manifest` | Generated manifest asks only for `activeTab`, `scripting`, `storage`, with optional per-site access. No `host_permissions`, `content_scripts` or `web_accessible_resources`. |
 | `npm run test:e2e:harness` | 30 browser tests pass, 1 skipped (a popup test that needs the real extension); last run 28 November 2026, including the first-time welcome in the popup, the drawer's close button, scrolling while choosing, reactions, keyboard use of the card, and motion (fading out, pressing, the single greeting, reduced motion). These run the real built overlay script in headless Chromium on the fixture pages, with stand-in extension APIs. Covered: the guest journey through reload, reply, resolve and reopen; separate pages on one website; History grouping; repeated text, moved and removed targets, reattach; Escape; failed save and retry; nothing typed into the page being stored; single-page app navigation; docked tab movement and keyboard use; guest profile, feedback and navigation at 360px; host-page style conflicts; delete confirmation; removal when site access is lost. |
@@ -133,6 +180,12 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 
 ## Decisions pending
 
+The maintainer approved the [Milestone 2 sign-in screens and recovery rules](MILESTONE-2.md#sign-in-screens-and-recovery-28-november-2026), including reopening the popup, changing the email address and replacing a code after a successful resend.
+
+On 28 November the maintainer approved per-link expiry for Milestone 2. The default is **Until I stop sharing**, with **7 days**, **14 days** and **30 days** as options (14 days was added later the same day). Expiry has the same effect as Stop sharing. Sharing again always creates a fresh link. Previous links and their saved entries stay closed.
+
+Milestone 2 History, distribution and the shared-link address were settled on 28 November. Owners see a Shared label under the website. Recipients can explicitly save a conversation to Saved shared threads. Links use `https://blob.davidokunlola.com/t/<random-code>` and open the web conversation by default. The extension ZIP is for testers ahead of the store release. [Milestone 2 draft](MILESTONE-2.md)
+
 - **Copyright line.** LICENSE says "Blob contributors". A named holder may be preferable.
 - **Mascot licence.** The mascot artwork is in the repository as part of the extension. Whether it is covered by MIT or reserved should be stated in THIRD_PARTY.md.
 - The drawer header follows the Approved for Implementation page.
@@ -143,8 +196,10 @@ Also worth trying: refuse the permission prompt in step 6 (the popup should say 
 Milestone 1 is accepted by the maintainer. Close it out, then begin Milestone 2. Do not write Milestone 2 code before step 2 is settled.
 
 1. Merge the Milestone 1 pull request. CI is green on `c452833` (run 10, 28 November 2026), read from the log: stand-in run 30 passed and 1 skipped, real-extension run 25 passed and 6 skipped, no retries. Merging is the maintainer's decision; do not merge without being asked.
-2. Settle the open items under "Still to confirm" in [MILESTONE-2.md](MILESTONE-2.md), and have the maintainer create the Google sign-in client and the D1 database it lists.
-3. Start Milestone 2 on a fresh branch from `main`, at step 1 of its "Order of work": the server and database with the access rules and their tests, and no interface. Update AGENTS.md's scope section at that point, because it still says Milestone 1 has no backend beyond the feedback relay.
+2. The open items in [MILESTONE-2.md](MILESTONE-2.md) were all settled with the maintainer by 28 November 2026; its "Still to confirm" list is empty. What remains before step 3 is for the maintainer to create the Google sign-in client and the D1 database it lists. (The Resend account is only needed for the last step.)
+3. Step 1 of Milestone 2 is built on the branch `milestone-2-shared-threads`, and the load test passed against the test copy on Cloudflare on 28 November 2026 (see "Milestone 2, step 1" above). Next:
+   - **Step 2: sign in and sign out in the extension**, with Google sign-in. It needs the maintainer's Google Cloud project with a "Sign in with Google" client. It adds the `identity` permission, so the manifest check changes on purpose.
+   - After any change to the server: `npm run check`, redeploy the test copy, `npm run test:smoke` against it, then the load test with `--real-time --judge-time`. Commands are in [worker/api/README.md](../worker/api/README.md).
 
 Earlier notes, kept for the record:
 

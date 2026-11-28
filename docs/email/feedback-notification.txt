@@ -1,0 +1,4 @@
+Rating: {{rating}}
+Blob version: {{version}}
+
+{{message}}

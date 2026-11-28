@@ -23,6 +23,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run check:manifest
+      - run: npm run check:worker
 
   browser:
     name: Browser tests

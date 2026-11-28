@@ -1,0 +1,65 @@
+// Blob's sharing server. See README.md in this folder.
+//
+// Two copies are described here:
+//   - the real service (the settings at the top), which is NOT deployed yet;
+//   - a test copy (under "env" > "test"), for the load test and for trying things.
+//
+// `npm run check:worker` reads this file and fails if the test-only sign-in
+// could ever be switched on for the real service.
+{
+  "name": "blob-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-26",
+
+  // The real service gets its address (blob.davidokunlola.com) when the web page
+  // for recipients is built. Until then it has none, on purpose.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "blob",
+      // Filled in by the maintainer after `npx wrangler d1 create blob`.
+      "database_id": "REPLACE-WITH-THE-REAL-DATABASE-ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Every 15 minutes: delete conversations past their deadline, ended sessions
+  // and old counters.
+  "triggers": { "crons": ["*/15 * * * *"] },
+
+  "vars": {
+    "PUBLIC_ORIGIN": "https://blob.davidokunlola.com"
+  },
+
+  // FINGERPRINT_KEY (the key sign-in identities are scrambled with) is a secret:
+  //   npx wrangler secret put FINGERPRINT_KEY
+  // It is deliberately not written here.
+
+  "env": {
+    // The test copy: its own name, its own database, its own workers.dev address.
+    // Never the real one. Also what `wrangler dev --env test` runs locally.
+    "test": {
+      "name": "blob-api-test",
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "blob-test",
+          // Made with `npx wrangler d1 create blob-test` on 28 November 2026.
+          // An id is a name, not a key: it is no use without the account's sign-in.
+          "database_id": "9ddb23f7-8845-4442-809d-48da892fe82c",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "triggers": { "crons": ["*/15 * * * *"] },
+      "vars": {
+        // Lets tests sign in without Google. The server also refuses it at the
+        // real service's address whatever this says (see src/index.ts).
+        "TEST_SIGN_IN": "on"
+      }
+    }
+  }
+}

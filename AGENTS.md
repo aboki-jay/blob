@@ -8,7 +8,9 @@ Read [docs/STATUS.md](docs/STATUS.md) first. It says what works, what was verifi
 
 ```bash
 npm install                 # also runs `wxt prepare`
-npm run check               # typecheck + unit tests + build + manifest check
+npm run check               # typecheck + unit tests + build + manifest check + worker config check
+npm run test:load -- --url http://127.0.0.1:8787   # 150-person load test against a running sharing server (see worker/api/README.md)
+npm run test:smoke -- --url http://127.0.0.1:8787  # every kind of request once, against a running sharing server; run after deploying the test copy
 npm run test:e2e            # browser tests, real extension (needs: npx playwright install chromium)
 npm run test:e2e:harness    # same tests, stand-in extension APIs; use if the real run cannot start
 npm run dev                 # WXT live-reload mode; not yet tried here
@@ -18,10 +20,12 @@ Run `npm run check` and one of the browser test commands before finishing any ch
 
 ## Scope
 
-- Build only the milestone named in docs/STATUS.md.
-- Accounts, sharing, private rooms, real-time features, AI integrations and billing are roadmap items. Do not build them early, and never present a mock network operation as a real feature.
-- Milestone 1 works without a backend, authentication provider, cloud database, AI API or paid service. Keep it that way. The one approved exception is the feedback relay in `worker/feedback/` (a Cloudflare Worker that emails the feedback form to the maintainer). It is optional: with `FEEDBACK_ENDPOINT` in `lib/feedback.ts` set to `''`, Blob sends nothing and nothing else depends on it. Do not route anything else through it.
-- Do not publish to the Chrome Web Store, create paid infrastructure, or use production credentials.
+- Build only the milestone named in docs/STATUS.md, and within it only the step STATUS.md names. Milestone 2 (shared threads) is in progress; its plan, decisions and order of work are in [docs/MILESTONE-2.md](docs/MILESTONE-2.md).
+- Private rooms, invitations, real-time features, AI integrations and billing are roadmap items. Do not build them early, and never present a mock network operation as a real feature.
+- The guest experience from Milestone 1 keeps working with no account and no server. Signing in and sharing are additions: nothing leaves the device unless its owner shares it.
+- Milestone 2 has one server, the sharing server in `worker/api/` (a Cloudflare Worker with a D1 database), on free infrastructure only. Do not add another backend, an authentication service, a paid plan or an AI API without the maintainer deciding it. Milestone 2 decisions are discussed with the maintainer before they are recorded or built (see the note at the top of MILESTONE-2.md).
+- The feedback relay in `worker/feedback/` is separate and optional: with `FEEDBACK_ENDPOINT` in `lib/feedback.ts` set to `''`, Blob sends no feedback. Do not route anything else through it.
+- Do not publish to the Chrome Web Store, create paid infrastructure, or use production credentials. Deploying is the maintainer's step.
 
 ## Architecture boundaries
 
@@ -35,6 +39,8 @@ Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Keep these separate:
 | Anchoring | `lib/anchor/` | No storage or rendering code. Never read form values or editable content. Prefer "unavailable" to a wrong pin. |
 | Site access | `lib/sites.ts`, `entrypoints/background.ts`, `entrypoints/popup/` | `activeTab` is temporary; lasting access is an optional per-site permission. |
 | Overlay UI | `overlay/`, `entrypoints/overlay.ts` | Lives in a Shadow Root. Sizes in px, not rem. Everything added to a page is removed on unmount. |
+| Shared input checks | `lib/input.ts` | Used by both the extension and the sharing server. No browser, storage or network code. |
+| Sharing server | `worker/api/` | Access rules live in the database statements in `src/store.ts`, each action one batch. Every input is checked again in `src/validate.ts`. The test-only sign-in must stay impossible on the real service; `npm run check:worker` enforces the configuration. Keep the 150-person load test passing (`npm test`). No `LIKE` or `GLOB` in statements: Cloudflare's database refuses long patterns. |
 
 The overlay script is not a manifest content script. It is injected on a toolbar click or registered at runtime for granted sites. Do not add `content_scripts`, `host_permissions` or `web_accessible_resources`; `npm run check:manifest` fails if they appear.
 
