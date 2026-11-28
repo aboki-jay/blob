@@ -281,14 +281,6 @@
   background: var(--bg-fill3);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tag-react__choices,
-  .tag-react__choices button {
-    animation: none;
-    transition: none;
-  }
-}
-
 .tag-reply-btn {
   padding: 0 4px;
   border-radius: 6px;
@@ -480,8 +472,4 @@
   color: var(--error-text);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .comment-tag {
-    animation: none;
-  }
-}
+/* What changes for people who ask for less motion is in motion.css. */

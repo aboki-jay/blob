@@ -151,10 +151,12 @@ const test = base.extend<{ driver: Driver }>({
 });
 
 const blob = (page: Page) => page.locator('blob-overlay .blob');
-const drawer = (page: Page) => page.locator('blob-overlay .drawer');
+// A drawer or card that has been closed lingers for about a tenth of a second
+// while it fades out. To a person it is gone, so the tests do not count it either.
+const drawer = (page: Page) => page.locator('blob-overlay .drawer:not([data-leaving] *)');
 const pins = (page: Page) => page.locator('blob-overlay .pin');
 /** The comment card on the page: used both to write a first comment and to read a conversation. */
-const composer = (page: Page) => page.locator('blob-overlay .comment-tag');
+const composer = (page: Page) => page.locator('blob-overlay .comment-tag:not([data-leaving] *)');
 const tag = composer;
 
 /**
@@ -171,6 +173,12 @@ const settled = (page: Page) =>
         .map((animation) => animation.finished.catch(() => undefined)),
     ).then(() => undefined),
   );
+
+/** With the drawer already open on the welcome screen: carry on as a guest. */
+async function continueFromWelcome(page: Page) {
+  await page.getByRole('button', { name: 'Continue as a Guest' }).click();
+  await expect(page.getByText('No Blobs on this website yet')).toBeVisible();
+}
 
 async function continueAsGuest(page: Page) {
   await blob(page).click();
@@ -387,6 +395,32 @@ test('Escape cancels choosing, and the page works normally afterwards', async ({
   await blob(page).click();
   await pick(page, '#intro');
   await expect(page.getByRole('textbox', { name: 'Comment' })).toHaveValue('Unfinished thought');
+});
+
+test('keyboard can reach comment actions and Escape dismisses one layer at a time', async ({ page, driver }) => {
+  await driver.open(page);
+  await continueAsGuest(page);
+  await comment(page, '#hero', 'Keyboard comment');
+  await pins(page).click();
+  const card = tag(page);
+  await page.mouse.move(1, 1);
+  await card.getByRole('button', { name: 'Close comment', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(card.getByRole('group', { name: 'Your comment: Keyboard comment' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  const add = card.getByRole('button', { name: 'Add a reaction' });
+  await expect(add).toBeFocused();
+  await page.keyboard.press('Enter');
+  const palette = card.getByRole('group', { name: 'Reactions' });
+  await page.keyboard.press('Tab');
+  await expect(palette.getByRole('button').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(palette).toHaveCount(0);
+  await expect(add).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(card.getByRole('button', { name: 'Reply', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(card).toHaveCount(0);
 });
 
 test('reactions: add one from the smiley, see it stay, take it back', async ({ page, driver }) => {
@@ -712,6 +746,83 @@ test('the Blob tab keeps clear of scrollbars', async ({ page, driver }) => {
   expect(await page.locator('blob-overlay .edge-slot').evaluate((el) => getComputedStyle(el).clipPath)).toContain('inset');
 });
 
+test('motion: things fade out when closed, give when pressed, greet once, and calm down on request', async ({ page, driver }) => {
+  await driver.open(page);
+  const tab = blob(page);
+  // The first appearance on a page is a greeting: the tab is fully out for a moment.
+  await expect(tab).toHaveClass(/edge-tab--out/);
+
+  await tab.click();
+  await expect(drawer(page)).toBeVisible();
+  await settled(page);
+  // Watch what happens to the drawer when it is closed.
+  await page.evaluate(() => {
+    const root = document.querySelector('blob-overlay')!.shadowRoot!;
+    const seen = { lingered: false, inert: false, hiddenFromReaders: false, fades: '', tabBack: false };
+    (window as any).__leaving = seen;
+    new MutationObserver(() => {
+      const wrapper = root.querySelector('[data-leaving]');
+      const leavingDrawer = wrapper?.querySelector(':scope > .drawer');
+      if (!wrapper || !leavingDrawer) return;
+      seen.lingered = true;
+      seen.inert = (wrapper as HTMLElement).inert;
+      seen.hiddenFromReaders = wrapper.getAttribute('aria-hidden') === 'true';
+      seen.fades = getComputedStyle(leavingDrawer).transitionProperty;
+      seen.tabBack = !!root.querySelector('.blob');
+    }).observe(root, { subtree: true, childList: true, attributes: true });
+  });
+  await drawer(page).getByRole('button', { name: 'Close Blob' }).click();
+  // To a person it is gone at once and the tab is back...
+  await expect(drawer(page)).toHaveCount(0);
+  await expect(tab).toBeVisible();
+  // ...while the old drawer fades for a moment, out of reach, and is then really removed.
+  await expect(page.locator('blob-overlay .drawer')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__leaving)).toEqual({
+    lingered: true,
+    inert: true,
+    hiddenFromReaders: true,
+    fades: 'opacity, transform',
+    tabBack: true,
+  });
+  // Closing hands keyboard focus back to the tab.
+  await expect(tab).toBeFocused();
+
+  // Pressing gives a little: the button shrinks slightly while held.
+  await tab.click();
+  await continueFromWelcome(page);
+  const add = page.getByRole('button', { name: 'Add a Blob' });
+  const box = (await add.boundingBox())!;
+  const scale = () => add.evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  expect(await scale()).toBe(1);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect.poll(scale).toBeCloseTo(0.97, 2);
+  await page.mouse.up();
+  await expect(page.locator('blob-overlay .catcher')).toBeVisible();
+
+  // The tab is back while choosing, without greeting a second time: the pointer
+  // is nowhere near it and it does not have focus, so it stays tucked.
+  await page.mouse.move(300, 300);
+  await expect(tab).toBeVisible();
+  await expect(tab).not.toHaveClass(/edge-tab--out/);
+  await page.keyboard.press('Escape');
+
+  // For people who ask for less motion: fades stay, movement goes.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await comment(page, '#hero', 'A calm comment');
+  await pins(page).click();
+  await expect(tag(page)).toBeVisible();
+  expect(await tag(page).evaluate((el) => getComputedStyle(el).animationName)).toBe('fade-in');
+  expect(await tab.evaluate((el) => getComputedStyle(el).transitionProperty)).not.toContain('transform');
+  await page.keyboard.press('Escape');
+  await expect(tag(page)).toHaveCount(0);
+  await tab.click();
+  const close = drawer(page).getByRole('button', { name: 'Close Blob' });
+  expect(await drawer(page).evaluate((el) => getComputedStyle(el).animationName)).toBe('fade-in');
+  // The close corner still fades to red.
+  expect(await close.evaluate((el) => getComputedStyle(el).transitionProperty)).toContain('background-color');
+});
+
 test('closing the drawer: the close corner turns red when pointed at or focused', async ({ page, driver }) => {
   await driver.open(page);
   await blob(page).click();
@@ -1008,6 +1119,43 @@ async function openFeedback(page: Page) {
   await drawer(page).getByLabel('Guest profile').click();
   await drawer(page).getByRole('button', { name: 'Feedback' }).click();
 }
+
+test('pending feedback stays locked across drawer visits and failure preserves the draft', async ({ page, driver }) => {
+  test.skip(!HARNESS, 'Controls the stand-in relay to hold one request in flight.');
+  await driver.open(page);
+  await openFeedback(page);
+  await page.evaluate(() => {
+    const relay = (globalThis as any).__blobHarness.feedback;
+    relay.fail = true;
+    relay.calls = 0;
+    relay.beforeSend = () => {
+      relay.calls++;
+      return new Promise<void>(resolve => { relay.release = resolve; });
+    };
+  });
+  const form = drawer(page);
+  const rating = form.getByRole('button', { name: 'Good', exact: true });
+  const text = form.getByPlaceholder('Share your feedback');
+  await rating.click();
+  await text.fill('Keep my draft');
+  await form.getByRole('button', { name: 'Submit' }).dblclick();
+  await expect(form.getByRole('status')).toHaveText('Sending feedback…');
+  await form.getByLabel('Close Blob').click();
+  await openFeedback(page);
+  await expect(rating).toBeDisabled();
+  await expect(text).toBeDisabled();
+  await expect(form.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+  const calls = await page.evaluate(() => {
+    const relay = (globalThis as any).__blobHarness.feedback;
+    relay.release();
+    return relay.calls;
+  });
+  expect(calls).toBe(1);
+  await expect(form.getByRole('alert')).toBeVisible();
+  await expect(text).toBeEnabled();
+  await expect(text).toHaveValue('Keep my draft');
+  await expect(rating).toHaveAttribute('aria-pressed', 'true');
+});
 
 test('feedback: Submit sends the rating and text to the Blob project, and nothing else', async ({ page, driver }) => {
   await driver.open(page);

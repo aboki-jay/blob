@@ -82,6 +82,12 @@ function scrollbarInset(side: Side, y: number): number {
   return 0;
 }
 
+/**
+ * The tab greets once per page load. It is put back every time the drawer
+ * closes, and a greeting on every close would stop being a greeting.
+ */
+let greeted = false;
+
 export function EdgeTab({
   position,
   count,
@@ -99,7 +105,7 @@ export function EdgeTab({
   const [vp, setVp] = useState(viewport);
   const [local, setLocal] = useState(position);
   const [near, setNear] = useState(false);
-  const [hello, setHello] = useState(true);
+  const [hello, setHello] = useState(!greeted);
   const [dragging, setDragging] = useState(false);
   const [focused, setFocused] = useState(false);
   const [inset, setInset] = useState(0);
@@ -112,8 +118,10 @@ export function EdgeTab({
   const height = Math.min(HEIGHT, vp.h - EDGE * 2);
   const top = clamp((local?.y ?? 0.5) * vp.h - height / 2, EDGE, vp.h - height - EDGE);
 
-  // Say hello, then tuck away.
+  // Say hello the first time, then tuck away.
   useEffect(() => {
+    if (greeted) return;
+    greeted = true;
     const timer = setTimeout(() => setHello(false), HELLO_MS);
     return () => clearTimeout(timer);
   }, []);

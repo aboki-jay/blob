@@ -6,7 +6,9 @@ import type { AnchorDescriptor } from '@/lib/types';
 import { send, useDraft, useStored, type Stored } from './client';
 import { Bar, Drawer, GuestNav, Outline, Picker, Pin, type SavePhase, type Section } from './components';
 import { useAnchors, useEscape, usePage } from './hooks';
+import { FeedbackDraftProvider } from './feedback';
 import { EdgeTab, sideOf } from './launcher';
+import { Leaving } from './presence';
 import { NewCommentTag, ThreadTag } from './tag';
 import { Button, Notice } from './ui';
 import { Activity, History, ThreadView, Welcome, type HistoryTab } from './views';
@@ -56,7 +58,11 @@ export function App({ host, commands, onUnmount }: Props) {
   if (!page) return null;
   // Keyed by page: moving to another page (including inside a single-page app)
   // starts this layer afresh, so no pin, composer or selection is carried over.
-  return <PageLayer key={page.key} host={host} stored={stored} page={page} open={open} setOpen={setOpen} view={view} setView={setView} />;
+  return (
+    <FeedbackDraftProvider>
+      <PageLayer key={page.key} host={host} stored={stored} page={page} open={open} setOpen={setOpen} view={view} setView={setView} />
+    </FeedbackDraftProvider>
+  );
 }
 
 interface ComposerState {
@@ -106,10 +112,19 @@ function PageLayer({
   const located = useAnchors(pageThreads);
   const openCount = pageThreads.filter((thread) => thread.status === 'open').length;
 
+  // Closing the drawer hands keyboard focus back to the tab. The tab only exists
+  // once the drawer has closed, so this waits for that rather than guessing how
+  // many frames it takes.
+  const returnFocus = useRef(false);
   const closeDrawer = useCallback(() => {
+    returnFocus.current = true;
     setOpen(false);
-    requestAnimationFrame(() => blobRef.current?.focus());
   }, [setOpen]);
+  useEffect(() => {
+    if (open || !returnFocus.current) return;
+    returnFocus.current = false;
+    blobRef.current?.focus();
+  }, [open]);
 
   /** Opens the comment tag next to a pin, on the page itself. */
   const openTag = (threadId: string) => {
@@ -327,18 +342,6 @@ function PageLayer({
       {pending && <Outline element={pending.element} />}
       {spotElement && <Outline element={spotElement} pulse />}
 
-      {composer && (
-        <NewCommentTag
-          element={composer.element}
-          anchor={composer.anchor}
-          text={draft}
-          onText={setDraft}
-          phase={phase}
-          onSubmit={() => void saveComment()}
-          onClose={() => setComposer(null)}
-        />
-      )}
-
       {mode.kind === 'select' && (
         <GuestNav onExit={() => setMode({ kind: 'idle' })} onResolved={() => {
           setMode({ kind: 'idle' });
@@ -363,9 +366,26 @@ function PageLayer({
           {pending.failed ? 'Couldn’t save the new location.' : `Move this comment to ${pending.anchor.label}?`}
         </Bar>
       )}
-      {tagThread && tagElement && (
-        <ThreadTag key={tagThread.id} element={tagElement} thread={tagThread} drafts={drafts} loaded={loaded} onClose={() => setTagId(null)} />
-      )}
+      {/* One slot for the comment card, whichever kind it is, so that it fades out
+          when closed but a saved comment replaces its composer without a gap. */}
+      <Leaving ms={120}>
+        {composer ? (
+          <NewCommentTag
+            element={composer.element}
+            anchor={composer.anchor}
+            text={draft}
+            onText={setDraft}
+            phase={phase}
+            onSubmit={() => void saveComment()}
+            onClose={() => setComposer(null)}
+          />
+        ) : (
+          tagThread &&
+          tagElement && (
+            <ThreadTag key={tagThread.id} element={tagElement} thread={tagThread} drafts={drafts} loaded={loaded} onClose={() => setTagId(null)} />
+          )
+        )}
+      </Leaving>
 
       {mode.kind === 'idle' && !pending && !composer && !open && !tagElement && savedThread && (
         <Bar actions={<Button variant="text" onClick={() => openThread(savedThread.id)}>Open conversation</Button>}>
@@ -378,15 +398,19 @@ function PageLayer({
         </Bar>
       )}
 
-      {open ? (
-        <Drawer
-          section={section}
-          onSection={(next) => setView(next === 'history' ? { name: 'history', tab: 'websites' } : { name: 'activity' })}
-          onClose={closeDrawer}
-        >
-          {content}
-        </Drawer>
-      ) : (
+      {/* The drawer fades back towards its edge while the tab returns. */}
+      <Leaving ms={160}>
+        {open && (
+          <Drawer
+            section={section}
+            onSection={(next) => setView(next === 'history' ? { name: 'history', tab: 'websites' } : { name: 'activity' })}
+            onClose={closeDrawer}
+          >
+            {content}
+          </Drawer>
+        )}
+      </Leaving>
+      {!open && (
         <EdgeTab
           buttonRef={blobRef}
           position={settings.blobPosition}

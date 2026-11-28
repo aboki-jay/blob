@@ -3,6 +3,7 @@ import laugh from '@/assets/icons/laugh.svg?raw';
 import { newId } from '@/lib/messages';
 import { REACTIONS, type AnchorDescriptor, type Drafts, type Message, type Reaction, type Thread } from '@/lib/types';
 import { send, useDraft } from './client';
+import { Leaving } from './presence';
 import { Icon, icons } from './ui';
 
 /**
@@ -298,6 +299,7 @@ function Comment({
   }, [choosing]);
 
   const react = async (emoji: Reaction, on: boolean) => {
+    if (choosing) smiley.current?.focus({ preventScroll: true });
     setChoosing(false);
     setFailed(false);
     const result = await send({ type: 'thread/react', threadId, messageId: message.id, emoji, on });
@@ -306,7 +308,7 @@ function Comment({
 
   const classes = ['tag-comment', replying && 'tag-comment--replying', (given.length > 0 || choosing) && 'tag-comment--reacted'];
   return (
-    <div className={classes.filter(Boolean).join(' ')}>
+    <div className={classes.filter(Boolean).join(' ')} tabIndex={0} role="group" aria-label={`Your comment: ${message.body}`}>
       <div className="tag-comment__head">
         <GuestAvatar />
         <span className="tag-comment__who">
@@ -320,6 +322,13 @@ function Comment({
       <div className="tag-comment__actions">
         <span
           className="tag-react"
+          onKeyDown={(event) => {
+            if (!choosing || event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            setChoosing(false);
+            smiley.current?.focus({ preventScroll: true });
+          }}
           // Clicking or tabbing away puts the choices back.
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) setChoosing(false);
@@ -335,28 +344,31 @@ function Comment({
           >
             <Icon svg={laugh} />
           </button>
-          {choosing && (
-            <span
-              ref={choices}
-              className={`tag-react__choices ${place ? (place.below ? 'is-below' : 'is-above') : ''}`}
-              // Measured first, then shown where it belongs.
-              style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: 'hidden' }}
-              role="group"
-              aria-label="Reactions"
-            >
-              {REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  aria-label={REACTION_NAMES[emoji]}
-                  aria-pressed={given.includes(emoji)}
-                  onClick={() => void react(emoji, !given.includes(emoji))}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </span>
-          )}
+          {/* Stays for a moment after closing, so it can shrink back into the smiley. */}
+          <Leaving ms={100} inline>
+            {choosing && (
+              <span
+                ref={choices}
+                className={`tag-react__choices ${place ? (place.below ? 'is-below' : 'is-above') : ''}`}
+                // Measured first, then shown where it belongs.
+                style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: 'hidden' }}
+                role="group"
+                aria-label="Reactions"
+              >
+                {REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    aria-label={REACTION_NAMES[emoji]}
+                    aria-pressed={given.includes(emoji)}
+                    onClick={() => void react(emoji, !given.includes(emoji))}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </span>
+            )}
+          </Leaving>
           {given.map((emoji) => (
             <button
               key={emoji}

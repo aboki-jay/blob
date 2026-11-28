@@ -7,11 +7,12 @@ import { App } from './App';
 import { setDisconnectHandler } from './client';
 import { loadFonts } from './fonts';
 import launcherCss from './launcher.css?inline';
+import motionCss from './motion.css?inline';
 import baseCss from './style.css?inline';
 import tagCss from './tag.css?inline';
 
-// Order matters: the launcher's rules come last so they win.
-const css = `${baseCss}\n${launcherCss}\n${tagCss}`;
+// Order matters: later files win, and the shared motion rules come last of all.
+const css = `${baseCss}\n${launcherCss}\n${tagCss}\n${motionCss}`;
 
 const MOUNTED = '__blobOverlayMounted';
 const REPLACE_EVENT = 'blob:replace';

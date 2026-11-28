@@ -133,10 +133,4 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .blob.edge-tab,
-  .root .drawer {
-    animation: none;
-    transition: none;
-  }
-}
+/* What changes for people who ask for less motion is in motion.css. */

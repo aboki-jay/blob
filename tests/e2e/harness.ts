@@ -43,7 +43,7 @@ const harness = {
   /** For the popup: what it asked the background to do. */
   requests: [] as unknown[],
   /** The feedback relay: whether one exists, whether it is failing, and what it was sent. */
-  feedback: { enabled: true, fail: false, sent: [] as unknown[] },
+  feedback: { enabled: true, fail: false, sent: [] as unknown[], beforeSend: undefined as (() => Promise<void>) | undefined },
   /** Sends a command to the overlay, as the popup or background would. */
   command(message: unknown) {
     messageListeners.forEach((listener) => listener(message, { id: 'blob-harness' }, () => undefined));
@@ -95,6 +95,7 @@ const fake = {
           feedback: {
             enabled: harness.feedback.enabled,
             send: async (input) => {
+              await harness.feedback.beforeSend?.();
               if (harness.feedback.fail) throw new BlobError('send-failed');
               harness.feedback.sent.push(input);
             },

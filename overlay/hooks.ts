@@ -143,14 +143,24 @@ export function useEscape(active: boolean, handler: (inBlob: boolean) => boolean
   useEffect(() => {
     if (!active) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (!latest.current(event.composedPath().includes(host))) return;
       event.preventDefault();
       event.stopPropagation();
     };
-    // Capture on window so it works whether focus is in the page or in Blob.
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    // Inside Blob, let the focused control dismiss its own popup first.
+    // Outside Blob, selection mode still needs first refusal over the page.
+    const shadow = host.shadowRoot;
+    const inside = (event: Event) => onKey(event as KeyboardEvent);
+    const outside = (event: KeyboardEvent) => {
+      if (!event.composedPath().includes(host)) onKey(event);
+    };
+    shadow?.addEventListener('keydown', inside);
+    window.addEventListener('keydown', outside, true);
+    return () => {
+      shadow?.removeEventListener('keydown', inside);
+      window.removeEventListener('keydown', outside, true);
+    };
   }, [active, host]);
 }
 

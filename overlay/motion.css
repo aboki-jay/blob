@@ -1,0 +1,159 @@
+/*
+ * How Blob moves. Loaded last (see mount.tsx), so these rules win.
+ *
+ * Entrances are still defined beside the things that enter (launcher.css,
+ * tag.css). This file holds what is shared: the easing curve, how things leave,
+ * what a press feels like, and what changes for people who ask for less motion.
+ */
+
+:host {
+  /* A firm ease-out: quick to start, soft to stop. The built-in one is too weak. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ---------- Leaving ----------
+   Something that closes stays for a moment, marked `data-leaving` (see
+   presence.tsx), and fades back the way it came. Leaving is quicker than
+   arriving: the system is responding, not asking for attention. */
+
+.presence {
+  display: contents;
+}
+
+[data-leaving],
+[data-leaving] * {
+  pointer-events: none !important;
+}
+
+[data-leaving] > .drawer {
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.root[data-side='left'] [data-leaving] > .drawer {
+  transform: translateX(-16px);
+}
+
+[data-leaving] > .comment-tag {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms var(--ease-out), transform 120ms var(--ease-out);
+}
+
+[data-leaving] > .tag-react__choices {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out);
+}
+
+/* The navigation label fades out as well as in. `visibility` waits for the
+   fade to finish before hiding, and does not wait at all when showing. */
+.nav-tip {
+  transition: opacity 120ms ease, visibility 0s linear 120ms;
+}
+
+.nav-item:hover > .nav-tip,
+.nav-item:focus-visible > .nav-tip {
+  transition-delay: 0s;
+}
+
+/* ---------- Pressing ----------
+   Everything that can be pressed gives a little, so a press is felt before
+   anything else happens. */
+
+.btn,
+.icon-btn,
+.view-close,
+.rail__history,
+.rail__item,
+.guest-nav button,
+.theme-choices button,
+.pin,
+.tag__icon-btn,
+.tag__send,
+.tag-reply-btn,
+.tag-react__add,
+.tag-reaction {
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.btn:active:not(:disabled, [aria-disabled='true']),
+.tag-reply-btn:active,
+.tag-reaction:active,
+.guest-nav button:active,
+.theme-choices button:active,
+.rail__item:active:not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+/* Small round targets need a touch more for it to show. */
+.icon-btn:active,
+.view-close:active,
+.rail__history:active,
+.pin:active,
+.tag__icon-btn:active,
+.tag__send:active:not(:disabled),
+.tag-react__add:active {
+  transform: scale(0.95);
+}
+
+/* The emoji grows when pointed at, so pressing brings it part of the way back. */
+.tag-react__choices button:active {
+  transform: scale(1.05);
+}
+
+/* These two use their own `transform` for position or fill a whole corner, so
+   the mascot or the cross gives instead. */
+.blob.edge-tab .icon,
+.drawer__close .icon {
+  transition: transform 160ms var(--ease-out);
+}
+
+.blob.edge-tab:active .icon,
+.drawer__close:active .icon {
+  transform: scale(0.92);
+}
+
+/* ---------- Less motion ----------
+   Fewer and gentler, not none. Colours and fades stay, because they help show
+   what changed. Nothing slides, grows or pulses. */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-property: opacity, visibility, color, background-color, border-color, stroke, fill, box-shadow !important;
+  }
+
+  .root .drawer,
+  .comment-tag,
+  .tag-react__choices.is-above,
+  .tag-react__choices.is-below {
+    animation: fade-in 160ms ease backwards !important;
+  }
+
+  .blob.edge-tab,
+  .outline--pulse {
+    animation: none !important;
+  }
+
+  [data-leaving] > * {
+    transform: none !important;
+  }
+
+  .tag-react__choices button:hover,
+  .tag-react__choices button:active {
+    transform: none;
+  }
+}

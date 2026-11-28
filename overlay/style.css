@@ -1008,12 +1008,7 @@ textarea::placeholder {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
+/* What changes for people who ask for less motion is in motion.css. */
 .pane--center { justify-content: safe center; }
 .empty .art { flex: none; margin-bottom: -8px; }
 .pane--center .empty { margin-top: -44px; }
